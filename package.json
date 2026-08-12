@@ -1,0 +1,41 @@
+{
+  "name": "purpleipo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test-db": "node scripts/test-db.mjs",
+    "test-services": "node scripts/test-services.mjs",
+    "migrate": "node scripts/migrate.mjs",
+    "seed": "node scripts/seed.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.685.0",
+    "@google/generative-ai": "^0.21.0",
+    "clsx": "^2.1.1",
+    "dotenv": "^16.4.5",
+    "jose": "^5.9.6",
+    "lucide-react": "^0.460.0",
+    "next": "^14.2.18",
+    "pdf-parse": "^1.1.1",
+    "postgres": "^3.4.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@types/pdf-parse": "^1.1.4",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.18",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3"
+  }
+}
