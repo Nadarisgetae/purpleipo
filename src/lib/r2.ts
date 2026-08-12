@@ -1,36 +1,49 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-
-const accountId = process.env.R2_ACCOUNT_ID;
-const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-const bucketName = process.env.R2_BUCKET_NAME || 'purpleipo-docs';
-
-export const isR2Configured = Boolean(accountId && accessKeyId && secretAccessKey);
-
-export const r2Client = isR2Configured
-  ? new S3Client({
-      region: 'auto',
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: accessKeyId!,
-        secretAccessKey: secretAccessKey!,
-      },
-    })
-  : null;
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 /**
- * Uploads a file buffer to Cloudflare R2 (or returns local fallback URL if not configured).
+ * Returns a fresh R2/S3 client using runtime env vars.
+ * Called lazily inside uploadToR2() — never at module load time.
+ * This prevents ERR_INVALID_URL during Vercel static build phase.
+ */
+function getR2Client(): S3Client | null {
+  const accountId = process.env.R2_ACCOUNT_ID;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+
+  if (!accountId || !accessKeyId || !secretAccessKey) return null;
+
+  return new S3Client({
+    region: 'auto',
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    credentials: { accessKeyId, secretAccessKey },
+  });
+}
+
+export function isR2Configured(): boolean {
+  return Boolean(
+    process.env.R2_ACCOUNT_ID &&
+    process.env.R2_ACCESS_KEY_ID &&
+    process.env.R2_SECRET_ACCESS_KEY
+  );
+}
+
+/**
+ * Uploads a file buffer to Cloudflare R2 (or returns a local fallback URL).
  */
 export async function uploadToR2(
   fileBuffer: Buffer,
   fileName: string,
   contentType: string = 'application/pdf'
 ): Promise<string> {
-  if (!isR2Configured || !r2Client) {
-    console.warn('⚠️ Cloudflare R2 credentials missing. Storing file URL with local fallback.');
-    return `/uploads/${fileName}`;
+  const client = getR2Client();
+
+  if (!client) {
+    console.warn('⚠️ Cloudflare R2 not configured. Using local fallback URL.');
+    return `/uploads/${encodeURIComponent(fileName)}`;
   }
 
+  const accountId = process.env.R2_ACCOUNT_ID!;
+  const bucketName = process.env.R2_BUCKET_NAME || 'purpleipo-docs';
   const key = `prospectuses/${Date.now()}-${fileName}`;
 
   const command = new PutObjectCommand({
@@ -40,7 +53,7 @@ export async function uploadToR2(
     ContentType: contentType,
   });
 
-  await r2Client.send(command);
+  await client.send(command);
 
   const publicDomain = process.env.R2_PUBLIC_DOMAIN;
   if (publicDomain) {
@@ -49,3 +62,4 @@ export async function uploadToR2(
 
   return `https://${accountId}.r2.cloudflarestorage.com/${bucketName}/${key}`;
 }
+

@@ -3,6 +3,8 @@ import sql from '@/lib/db';
 import { uploadToR2 } from '@/lib/r2';
 import { parseRHPBuffer } from '@/lib/pdf-parser';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
