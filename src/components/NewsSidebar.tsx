@@ -40,16 +40,20 @@ export default function NewsSidebar({ articles }: NewsSidebarProps) {
       {/* Articles List */}
       <div className="space-y-3 max-h-[620px] overflow-y-auto pr-1">
         {articles.length === 0 ? (
-          <p className="text-xs text-slate-500 py-6 text-center">No news articles fetched yet.</p>
+          <div className="py-8 text-center space-y-3">
+            <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto" />
+            <p className="text-xs text-slate-500">Fetching live news from Economic Times,<br/>Business Standard & Moneycontrol...</p>
+            <p className="text-[10px] text-slate-600">Click ⚡ Sync Now to load instantly</p>
+          </div>
         ) : (
-          articles.map((item) => {
+          articles.map((item, index) => {
             const sentiment = item.sentiment_score ?? 0.5;
             const isPositive = sentiment >= 0.6;
             const isNegative = sentiment <= 0.4;
 
             return (
               <a
-                key={item.id}
+                key={item.id ?? `article-${index}`}
                 href={item.url}
                 target="_blank"
                 rel="noreferrer"

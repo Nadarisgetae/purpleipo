@@ -1,7 +1,8 @@
 /**
  * src/lib/news-fetcher.ts
- * Fetches live IPO news from Google News RSS — no API key required.
- * Also includes keyword-based stage detection from headlines.
+ * Fetches live IPO news from Indian financial RSS feeds.
+ * Uses Economic Times, Business Standard, Moneycontrol — no API key required.
+ * Google News RSS is NOT used (blocked from Vercel/cloud server IPs).
  */
 
 export interface RSSArticle {
@@ -12,6 +13,15 @@ export interface RSSArticle {
   snippet: string;
 }
 
+// Reliable RSS feeds that allow server-side fetching from Vercel/cloud IPs
+const MARKET_RSS_FEEDS = [
+  { url: 'https://economictimes.indiatimes.com/markets/ipos/fpos/rssfeeds/12985590.cms', source: 'Economic Times' },
+  { url: 'https://economictimes.indiatimes.com/markets/stocks/news/rssfeeds/2143429.cms', source: 'Economic Times' },
+  { url: 'https://www.business-standard.com/rss/markets-106.rss', source: 'Business Standard' },
+  { url: 'https://www.moneycontrol.com/rss/latestnews.xml', source: 'Moneycontrol' },
+  { url: 'https://www.livemint.com/rss/markets', source: 'Livemint' },
+];
+
 /** Extract CDATA or plain text from an XML tag */
 function extractTag(xml: string, tag: string): string {
   const cdataMatch = xml.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`));
@@ -20,21 +30,34 @@ function extractTag(xml: string, tag: string): string {
   return (plainMatch?.[1] || '').trim();
 }
 
+/** Clean HTML entities and tags from text */
+function cleanText(text: string): string {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/<[^>]+>/g, '')
+    .trim();
+}
+
 /** Parse raw RSS XML into article objects */
-function parseRSS(xml: string): RSSArticle[] {
+function parseRSS(xml: string, defaultSource: string): RSSArticle[] {
   const items: RSSArticle[] = [];
   const itemRegex = /<item>([\s\S]*?)<\/item>/g;
   let match;
 
   while ((match = itemRegex.exec(xml)) !== null) {
     const block = match[1];
-    const title = extractTag(block, 'title').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
-    const link = extractTag(block, 'link');
+    const title = cleanText(extractTag(block, 'title'));
+    const link = extractTag(block, 'link') || extractTag(block, 'guid');
     const pubDate = extractTag(block, 'pubDate');
-    const source = extractTag(block, 'source') || 'Google News';
-    const description = extractTag(block, 'description').replace(/<[^>]+>/g, '').substring(0, 200);
+    const source = cleanText(extractTag(block, 'source')) || defaultSource;
+    const description = cleanText(extractTag(block, 'description')).substring(0, 200);
 
-    if (title) {
+    if (title && title.length > 10) {
       items.push({
         title,
         link,
@@ -45,80 +68,86 @@ function parseRSS(xml: string): RSSArticle[] {
     }
   }
 
-  return items.slice(0, 8); // max 8 per company
+  return items.slice(0, 10);
 }
 
-/**
- * Fetch live news headlines for a company from Google News RSS.
- * Query: "{companyName} IPO India"
- */
-export async function fetchCompanyNews(companyName: string): Promise<RSSArticle[]> {
+/** Fetch a single RSS feed with timeout */
+async function fetchFeed(url: string, source: string): Promise<RSSArticle[]> {
   try {
-    const query = encodeURIComponent(`"${companyName}" IPO`);
-    const url = `https://news.google.com/rss/search?q=${query}&hl=en-IN&gl=IN&ceid=IN:en`;
-
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PurpleIPO/1.0)' },
-      signal: AbortSignal.timeout(8000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+      },
+      signal: AbortSignal.timeout(6000),
     });
-
     if (!res.ok) return [];
     const xml = await res.text();
-    return parseRSS(xml);
+    return parseRSS(xml, source);
   } catch {
     return [];
   }
 }
 
 /**
- * Fetch general Indian IPO market news.
+ * Fetch general Indian IPO/market news from multiple sources in parallel.
+ * Merges all results, filters for IPO relevance, deduplicates.
  */
 export async function fetchMarketIPONews(): Promise<RSSArticle[]> {
-  try {
-    const query = encodeURIComponent('India IPO 2025 SEBI NSE BSE listing');
-    const url = `https://news.google.com/rss/search?q=${query}&hl=en-IN&gl=IN&ceid=IN:en`;
+  const results = await Promise.allSettled(
+    MARKET_RSS_FEEDS.map(f => fetchFeed(f.url, f.source))
+  );
 
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PurpleIPO/1.0)' },
-      signal: AbortSignal.timeout(8000),
-    });
-
-    if (!res.ok) return [];
-    const xml = await res.text();
-    return parseRSS(xml);
-  } catch {
-    return [];
+  const allArticles: RSSArticle[] = [];
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value.length > 0) {
+      allArticles.push(...result.value);
+    }
   }
+
+  // Prefer IPO-relevant articles
+  const ipoKeywords = /ipo|sebi|listing|drhp|rhp|subscription|allotment|nse|bse|public issue/i;
+  const filtered = allArticles.filter(a => ipoKeywords.test(a.title));
+  const articles = filtered.length >= 5 ? filtered : allArticles;
+
+  // Deduplicate by title
+  const seen = new Set<string>();
+  return articles.filter(a => {
+    if (seen.has(a.title)) return false;
+    seen.add(a.title);
+    return true;
+  }).slice(0, 25);
 }
 
 /**
- * Keyword-based stage detection from news headlines.
- * Returns the minimum stage this company should be at, or null if no signal.
+ * Fetch news for a specific company — searches the market feeds for mentions.
+ */
+export async function fetchCompanyNews(companyName: string): Promise<RSSArticle[]> {
+  const allNews = await fetchMarketIPONews();
+  const company = companyName.toLowerCase().split(' ').slice(0, 2).join(' ');
+  const mentions = allNews.filter(a => a.title.toLowerCase().includes(company));
+  return mentions.length > 0 ? mentions : allNews.slice(0, 5);
+}
+
+/**
+ * Keyword-based IPO stage detection from news headlines.
+ * Returns the minimum stage this company should be at, or null if no signal found.
  */
 export function detectStageFromHeadlines(headlines: string[]): number | null {
   const text = headlines.join(' ').toLowerCase();
 
-  // Stage 12: Post-listing tracking
   if (text.match(/post.listing|trading|share price|market cap after/)) return 12;
-  // Stage 11: Early post-listing
   if (text.match(/listed at|debut|first day trading|listing pop/)) return 11;
-  // Stage 10: Listing
   if (text.match(/\blisting\b|\blisted\b|listing date|list on (nse|bse)/)) return 10;
-  // Stage 9: Allotment
   if (text.match(/allotment|basis of allotment|refund|share credited/)) return 9;
-  // Stage 8: Bidding open
   if (text.match(/subscription|bidding|ipo opens|issue opens|day [123] subscription|times subscribed/)) return 8;
-  // Stage 7: Anchor allotment
   if (text.match(/anchor investor|anchor allotment|anchor book/)) return 7;
-  // Stage 6: RHP filed
   if (text.match(/\brhp\b|red herring prospectus|final prospectus/)) return 6;
-  // Stage 5: SEBI approved / DRHP public
   if (text.match(/sebi approv|sebi nod|sebi clears|ipo approved|ipo set to open/)) return 5;
-  // Stage 4: SEBI review complete
   if (text.match(/sebi observation|sebi letter|sebi comment/)) return 4;
-  // Stage 3: SEBI review
-  if (text.match(/sebi review|sebi scrutin|under review|sebi examination/)) return 3;
-  // Stage 2: DRHP filed
+  if (text.match(/sebi review|sebi scrutin|under review/)) return 3;
   if (text.match(/drhp filed|drhp submitted|draft prospectus|draft red herring/)) return 2;
 
   return null;
