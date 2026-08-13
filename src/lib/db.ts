@@ -22,6 +22,7 @@ function getDb(): postgres.Sql {
       max: 5,
       idle_timeout: 20,
       connect_timeout: 10,
+      ssl: 'require',
     });
     console.log('✅ PurpleIPO: Database client created successfully');
   } catch (err) {
