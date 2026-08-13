@@ -16,6 +16,8 @@ export interface IPOItem {
   price_band: string;
   fresh_issue_amount: string;
   ofs_amount: string;
+  lot_size: string | null;
+  minimum_investment: string | null;
   issue_open_date: string | null;
   issue_close_date: string | null;
   listing_date: string | null;

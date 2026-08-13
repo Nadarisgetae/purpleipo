@@ -13,6 +13,8 @@ export async function GET() {
         i.price_band,
         i.fresh_issue_amount,
         i.ofs_amount,
+        i.lot_size,
+        i.minimum_investment,
         i.issue_open_date,
         i.issue_close_date,
         i.listing_date,

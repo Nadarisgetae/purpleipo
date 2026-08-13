@@ -336,10 +336,12 @@ export default function IPODetailModal({ ipo, onClose }: IPODetailModalProps) {
               </div>
 
               {/* Metrics grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {[
                   { label: 'Total Issue Size', val: ipo.issue_size || 'TBD' },
                   { label: 'Price Band', val: ipo.price_band || 'TBD' },
+                  { label: 'Lot Size', val: ipo.lot_size || 'TBD' },
+                  { label: 'Min Investment', val: ipo.minimum_investment || 'TBD' },
                   { label: 'Fresh Issue', val: ipo.fresh_issue_amount || 'TBD' },
                   { label: 'OFS', val: ipo.ofs_amount || 'TBD' },
                 ].map(({ label, val }) => (
