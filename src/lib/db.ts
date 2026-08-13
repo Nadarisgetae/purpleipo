@@ -1,53 +1,59 @@
 import postgres from 'postgres';
 
 /**
- * Lazily creates the postgres client on first use.
- * The client is NEVER instantiated at module-load time —
- * only when a query is actually executed.
- *
- * This prevents Vercel build errors (ERR_INVALID_URL / missing DATABASE_URL).
- *
- * CRITICAL FIX: The Proxy target MUST be a function (not {}),
- * otherwise sql`...` tagged template calls fail with "sql is not a function".
+ * Singleton postgres client — created lazily on first query.
+ * Uses globalThis so HMR in dev doesn't create multiple pools.
  */
 
-let _client: postgres.Sql | null = null;
+const globalRef = globalThis as typeof globalThis & { _purpleDb?: postgres.Sql };
 
-function getClient(): postgres.Sql {
-  if (_client) return _client;
+function getDb(): postgres.Sql {
+  if (globalRef._purpleDb) return globalRef._purpleDb;
 
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error('DATABASE_URL is not set. Add it to Vercel Environment Variables.');
+  const url = process.env.DATABASE_URL;
+
+  if (!url) {
+    console.error('❌ PurpleIPO: DATABASE_URL is not set. Go to Vercel → Settings → Environment Variables and add it.');
+    throw new Error('DATABASE_URL environment variable is missing. Add it in Vercel → Settings → Environment Variables.');
   }
 
-  _client = postgres(connectionString, {
-    max: 5,
-    idle_timeout: 20,
-    connect_timeout: 10,
-    ssl: 'prefer',
-  });
+  try {
+    globalRef._purpleDb = postgres(url, {
+      max: 5,
+      idle_timeout: 20,
+      connect_timeout: 10,
+    });
+    console.log('✅ PurpleIPO: Database client created successfully');
+  } catch (err) {
+    console.error('❌ PurpleIPO: Failed to create postgres client:', err);
+    throw err;
+  }
 
-  return _client;
+  return globalRef._purpleDb;
 }
 
-// The target MUST be a function so the apply trap fires for sql`...` calls
+/**
+ * Proxy target MUST be a function (not {}) so that sql`...`
+ * tagged template calls work correctly — the apply trap only fires
+ * when the target is callable.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const sql = new Proxy((() => {}) as unknown as postgres.Sql, {
-  // Handles: sql`SELECT ...`  (tagged template = function call)
+const sql = new Proxy(function sql_proxy() {} as any, {
   apply(_target, _thisArg, args: unknown[]) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (getClient() as any)(...args);
+    return (getDb() as any)(...args);
   },
-  // Handles: sql.begin(), sql.end(), sql.unsafe() etc.
   get(_target, prop: string | symbol) {
+    // Prevent Promise detection — sql is not a Promise
+    if (prop === 'then' || prop === 'catch' || prop === 'finally') return undefined;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = getClient();
+    const db = getDb();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const val = (client as any)[prop];
-    return typeof val === 'function' ? val.bind(client) : val;
+    const val = (db as any)[prop];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return typeof val === 'function' ? (val as any).bind(db) : val;
   },
-});
+}) as postgres.Sql;
 
 export { sql };
 export default sql;

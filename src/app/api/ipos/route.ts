@@ -39,6 +39,14 @@ export async function GET() {
     return NextResponse.json({ success: true, count: ipos.length, data: ipos });
   } catch (error) {
     console.error('Error fetching IPOs:', error);
-    return NextResponse.json({ success: false, message: 'Failed to fetch IPOs' }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        message: 'Failed to fetch IPOs',
+        error: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
   }
 }
+
