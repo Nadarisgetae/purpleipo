@@ -1,0 +1,33 @@
+name: Scrape Live IPOs
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  scrape-and-sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Install Playwright browsers
+      run: npx playwright install chromium --with-deps
+      
+    - name: Run Scraper
+      env:
+        API_URL: ${{ secrets.API_URL }}
+        SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
+      run: npx tsx scripts/playwright-scraper.ts
