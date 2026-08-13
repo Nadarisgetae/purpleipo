@@ -35,8 +35,18 @@ export async function GET() {
       ) s ON true
       ORDER BY i.current_stage DESC, i.created_at DESC;
     `;
+    // Postgres returns numeric types as strings to preserve precision.
+    // We must cast them to JavaScript Numbers before sending to the frontend
+    // so that .toFixed() calls don't crash.
+    const formattedData = ipos.map(i => ({
+      ...i,
+      rhp_score: i.rhp_score != null ? Number(i.rhp_score) : null,
+      independent_score: i.independent_score != null ? Number(i.independent_score) : null,
+      news_score: i.news_score != null ? Number(i.news_score) : null,
+      composite_score: i.composite_score != null ? Number(i.composite_score) : null,
+    }));
 
-    return NextResponse.json({ success: true, count: ipos.length, data: ipos });
+    return NextResponse.json({ success: true, count: formattedData.length, data: formattedData });
   } catch (error) {
     console.error('Error fetching IPOs:', error);
     return NextResponse.json(
