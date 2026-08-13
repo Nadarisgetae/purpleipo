@@ -52,6 +52,8 @@ export async function POST(request: Request) {
             price_band = ${item.price_band || null},
             lot_size = ${item.lot_size || null},
             minimum_investment = ${item.minimum_investment || null},
+            subscription_rate = ${item.subscription_rate || null},
+            oversubscription = ${item.oversubscription || null},
             issue_open_date = ${item.open_date || null},
             issue_close_date = ${item.close_date || null},
             listing_date = ${item.listing_date || null},
@@ -64,11 +66,13 @@ export async function POST(request: Request) {
         await sql`
           INSERT INTO ipos (
             company_id, current_stage, issue_size, price_band, lot_size, minimum_investment,
+            subscription_rate, oversubscription,
             issue_open_date, issue_close_date, listing_date
           )
           VALUES (
             ${companyId}, ${item.stage}, ${item.issue_size || null}, ${item.price_band || null}, 
             ${item.lot_size || null}, ${item.minimum_investment || null},
+            ${item.subscription_rate || null}, ${item.oversubscription || null},
             ${item.open_date || null}, ${item.close_date || null}, ${item.listing_date || null}
           )
         `;

@@ -15,6 +15,8 @@ export async function GET() {
         i.ofs_amount,
         i.lot_size,
         i.minimum_investment,
+        i.subscription_rate,
+        i.oversubscription,
         i.issue_open_date,
         i.issue_close_date,
         i.listing_date,

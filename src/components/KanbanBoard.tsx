@@ -18,6 +18,8 @@ export interface IPOItem {
   ofs_amount: string;
   lot_size: string | null;
   minimum_investment: string | null;
+  subscription_rate: string | null;
+  oversubscription: string | null;
   issue_open_date: string | null;
   issue_close_date: string | null;
   listing_date: string | null;
