@@ -10,7 +10,8 @@ const globalRef = globalThis as typeof globalThis & { _purpleDb?: postgres.Sql }
 function getDb(): postgres.Sql {
   if (globalRef._purpleDb) return globalRef._purpleDb;
 
-  const url = process.env.DATABASE_URL;
+  // Strip leading and trailing double quotes that might be accidentally pasted into Vercel
+  const url = process.env.DATABASE_URL?.replace(/^"|"$/g, '');
 
   if (!url) {
     console.error('❌ PurpleIPO: DATABASE_URL is not set. Go to Vercel → Settings → Environment Variables and add it.');
