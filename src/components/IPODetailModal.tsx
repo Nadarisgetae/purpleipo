@@ -471,9 +471,36 @@ export default function IPODetailModal({ ipo, onClose }: IPODetailModalProps) {
                             {ipo.anchor_investors ? 'Disclosed' : 'Data not shared'}
                           </span>
                         </div>
-                        <p className="text-slate-200 leading-relaxed font-medium">
-                          {ipo.anchor_investors || 'Data not shared'}
-                        </p>
+                        <div className="space-y-1.5">
+                          {ipo.anchor_investors ? (
+                            ipo.anchor_investors.includes('|') ? (
+                              ipo.anchor_investors.split('|').map((part, idx) => {
+                                const colonIdx = part.indexOf(':');
+                                if (colonIdx !== -1) {
+                                  const key = part.substring(0, colonIdx).trim();
+                                  const val = part.substring(colonIdx + 1).trim();
+                                  return (
+                                    <div key={idx} className="flex justify-between items-center py-1 border-b border-slate-800/40 last:border-0">
+                                      <span className="text-slate-400 font-medium">{key}</span>
+                                      <span className="text-slate-200 font-semibold text-right">{val}</span>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div key={idx} className="text-slate-200 font-medium py-1 border-b border-slate-800/40 last:border-0">
+                                    {part.trim()}
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <p className="text-slate-200 leading-relaxed font-medium">
+                                {ipo.anchor_investors}
+                              </p>
+                            )
+                          ) : (
+                            <p className="text-slate-500 italic">Data not shared</p>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -491,9 +518,36 @@ export default function IPODetailModal({ ipo, onClose }: IPODetailModalProps) {
                             {ipo.qib_details ? 'Disclosed' : 'Data not shared'}
                           </span>
                         </div>
-                        <p className="text-slate-200 leading-relaxed font-medium">
-                          {ipo.qib_details || 'Data not shared'}
-                        </p>
+                        <div className="space-y-1.5">
+                          {ipo.qib_details ? (
+                            ipo.qib_details.includes('|') ? (
+                              ipo.qib_details.split('|').map((part, idx) => {
+                                const colonIdx = part.indexOf(':');
+                                if (colonIdx !== -1) {
+                                  const key = part.substring(0, colonIdx).trim();
+                                  const val = part.substring(colonIdx + 1).trim();
+                                  return (
+                                    <div key={idx} className="flex justify-between items-center py-1 border-b border-slate-800/40 last:border-0">
+                                      <span className="text-slate-400 font-medium">{key}</span>
+                                      <span className="text-slate-200 font-semibold text-right">{val}</span>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div key={idx} className="text-slate-200 font-medium py-1 border-b border-slate-800/40 last:border-0">
+                                    {part.trim()}
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <p className="text-slate-200 leading-relaxed font-medium">
+                                {ipo.qib_details}
+                              </p>
+                            )
+                          ) : (
+                            <p className="text-slate-500 italic">Data not shared</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
