@@ -61,9 +61,9 @@ export async function POST(request: Request) {
             issue_open_date = COALESCE(${item.open_date || null}, issue_open_date),
             issue_close_date = COALESCE(${item.close_date || null}, issue_close_date),
             listing_date = COALESCE(${item.listing_date || null}, listing_date),
-            promoters = COALESCE(${item.promoters || null}, promoters),
-            qib_details = COALESCE(${item.qib_details || null}, qib_details),
-            anchor_investors = COALESCE(${item.anchor_investors || null}, anchor_investors),
+            promoters = CASE WHEN ${item.promoters || null} IS NOT NULL THEN ${item.promoters || null} ELSE promoters END,
+            qib_details = CASE WHEN ${item.qib_details || null} IS NOT NULL THEN ${item.qib_details || null} ELSE qib_details END,
+            anchor_investors = CASE WHEN ${item.anchor_investors || null} IS NOT NULL THEN ${item.anchor_investors || null} ELSE anchor_investors END,
             rating_score = COALESCE(${item.rating_score || null}, rating_score),
             gmp = COALESCE(${item.gmp || null}, gmp),
             updated_at = NOW()
