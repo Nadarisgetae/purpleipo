@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '../.env.local') });
 
 // Basic heuristic chunker for 500-page DRHPs
-function chunkPdfText(fullText) {
+function chunkPdfText(fullText: string) {
   const sections = {
     financial_statements: '',
     risk_factors: '',
@@ -37,14 +37,14 @@ function chunkPdfText(fullText) {
   return sections;
 }
 
-async function fetchPdfUrlFromDDG(query) {
+async function fetchPdfUrlFromDDG(query: string) {
   try {
     const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
     const text = await res.text();
     const $ = cheerio.load(text);
     
-    let pdfUrl = null;
+    let pdfUrl: string | null = null;
     $('a.result__url').each((i, el) => {
       const href = $(el).attr('href');
       if (href && href.includes('uddg=')) {
@@ -56,7 +56,7 @@ async function fetchPdfUrlFromDDG(query) {
       }
     });
     return pdfUrl;
-  } catch (err) {
+  } catch (err: any) {
     console.warn('DDG Search failed:', err.message);
     return null;
   }
@@ -83,7 +83,7 @@ async function scrapeDRHP() {
     for (const ipo of pendingIpos) {
       console.log(`\nFetching DRHP for: ${ipo.name}`);
       const query = `${ipo.name} DRHP filetype:pdf`;
-      let pdfUrl = await fetchPdfUrlFromDDG(query);
+      let pdfUrl: string | null = await fetchPdfUrlFromDDG(query);
 
       if (!pdfUrl) {
         console.warn(`❌ No DRHP PDF found for ${ipo.name}. Using a fallback SEBI PDF to populate the engine...`);
@@ -117,7 +117,7 @@ async function scrapeDRHP() {
           )
         `;
         console.log(`✅ Saved DRHP chunks for ${ipo.name} successfully.`);
-      } catch (err) {
+      } catch (err: any) {
         console.error(`Failed to parse PDF for ${ipo.name}:`, err.message);
       }
     }
@@ -128,7 +128,7 @@ async function scrapeDRHP() {
       WHERE parsed_at < NOW() - INTERVAL '3 days';
     `;
     console.log(`Deleted ${deleteRes.count} expired DRHP documents to free up storage.`);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Fatal Scraper Error:', error);
   } finally {
     await sql.end();
