@@ -39,65 +39,29 @@ async function scrapeWithRetry(page, href, companyName, maxRetries = 2) {
       await page.goto(href, { waitUntil: 'domcontentloaded', timeout: 45000 });
       const text = await page.locator('body').innerText();
 
-      // ── PROMOTERS ──
-      const promoterSentenceMatch = text.match(/[Tt]he\s+promoters?\s+of\s+the\s+company\s+(?:is|are)\s+([^\n.]{5,400})/i);
-      if (promoterSentenceMatch) {
-        result.promoters = promoterSentenceMatch[1].replace(/[.\s]+$/, '').trim();
-      } else {
-        const idx = text.indexOf('Promoters and Holding Pattern');
-        if (idx !== -1) {
-          const section = text.substring(idx, idx + 800);
-          const nameMatches = section.match(/(?:Mr\.|Ms\.|Mrs\.|Dr\.)\s+[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*/g);
-          if (nameMatches?.length > 0) result.promoters = nameMatches.join(', ');
-        }
-      }
-
-      // ── LISTING DATE ──
-      const listingMatch = text.match(/IPO Listing Date:\s*([^\n]+)/i);
-      if (listingMatch) {
-        const parsed = new Date(listingMatch[1].trim());
-        if (!isNaN(parsed.getTime())) result.listing_date = parsed.toISOString().split('T')[0];
-      }
-
-      // ── TABLE EXTRACTION ──
-      const allTables = await page.locator('table').all();
-      for (const table of allTables) {
-        const tableText = await table.innerText();
-
-        if (tableText.includes('QIB (Ex. Anchor)') && tableText.includes('Retail')) {
-          const tableRows = await table.locator('tr').all();
-          const lines = [];
-          for (const row of tableRows) {
-            const cells = await row.locator('td, th').allInnerTexts();
-            if (cells.length >= 2) {
-              const label = cells[0].trim();
-              const shares = cells[1].trim();
-              const pct = cells.length >= 3 ? cells[2].trim() : '';
-              if (!label || label === 'Investor Category' || label === '-% Shares') continue;
-              if (!shares || shares === 'Share Offered') continue;
-              const cleanShares = shares.replace('[.]', 'TBA');
-              const cleanPct = pct.replace('[.]', 'TBA').replace('-%', 'TBA');
-              lines.push(`${label}: ${cleanShares}${cleanPct ? ` (${cleanPct})` : ''}`);
-            }
-          }
-          if (lines.length > 0) result.qib_details = lines.join(' | ');
-        }
-
-        if (tableText.includes('Anchor Bidding Date')) {
-          const tableRows = await table.locator('tr').all();
-          let anchorDate = '', anchorSize = '', anchorList = '';
-          for (const row of tableRows) {
-            const cells = await row.locator('td, th').allInnerTexts();
-            if (cells.length >= 2) {
-              const label = cells[0].trim();
-              const value = cells[1].trim();
-              if (label === 'Anchor Investors List' && value && !value.includes('[.]')) anchorList = value;
-              if (label === 'Anchor Bidding Date' && value) anchorDate = value;
-              if (label === 'Anchor Size' && value && !value.includes('[.]')) anchorSize = value;
-            }
-          }
-          if (anchorList) result.anchor_investors = anchorList;
-          else if (anchorDate) result.anchor_investors = `Scheduled: ${anchorDate}${anchorSize ? ` | Size: ${anchorSize}` : ''}`;
+      // ── PROMOTERS, ANCHOR, QIB (Gemini Extraction) ──
+      const genAI = process.env.GEMINI_API_KEY ? new (require('@google/generative-ai').GoogleGenerativeAI)(process.env.GEMINI_API_KEY) : null;
+      const model = genAI ? genAI.getGenerativeModel({ model: 'gemini-3.6-flash' }) : null;
+      if (model) {
+        try {
+          const prompt = `Extract the following details from this IPO webpage text. If a piece of data is completely missing, return null for that field. Return ONLY valid JSON:
+{
+  "promoters": "Comma separated list of promoter names",
+  "anchor_investors": "List of anchor investors or anchor schedule",
+  "qib_details": "Details about QIB quota or subscription"
+}
+Webpage text:
+${text.substring(0, 15000)}`;
+          const res = await model.generateContent(prompt);
+          const responseText = res.response.text();
+          const cleanJson = responseText.substring(responseText.indexOf('{'), responseText.lastIndexOf('}') + 1);
+          const parsed = JSON.parse(cleanJson);
+          
+          if (parsed.promoters) result.promoters = parsed.promoters;
+          if (parsed.anchor_investors) result.anchor_investors = parsed.anchor_investors;
+          if (parsed.qib_details) result.qib_details = parsed.qib_details;
+        } catch (err) {
+          console.error('Gemini extraction failed for', companyName);
         }
       }
 

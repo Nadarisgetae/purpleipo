@@ -1,4 +1,36 @@
 import { chromium } from 'playwright';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { readFileSync } from 'fs';
+
+function loadEnv() {
+  try {
+    const env = readFileSync('.env.local', 'utf8');
+    for (const line of env.split('\n')) {
+      const clean = line.replace(/\r/g, '').trim();
+      if (!clean || clean.startsWith('#')) continue;
+      const eqIdx = clean.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = clean.substring(0, eqIdx).trim();
+      let val = clean.substring(eqIdx + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) val = val.slice(1, -1);
+      process.env[key] = val;
+    }
+  } catch (e) {}
+}
+loadEnv();
+
+async function gotoWithRetry(page: any, url: string, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      return true;
+    } catch (err) {
+      console.log(`Failed to load ${url}, retrying (${i + 1}/${retries})...`);
+      await new Promise(r => setTimeout(r, 2000 * (i + 1)));
+    }
+  }
+  return false;
+}
 
 async function fetchIPOs() {
   const browser = await chromium.launch({ headless: true });
@@ -10,9 +42,13 @@ async function fetchIPOs() {
   const iposMap = new Map<string, any>();
 
   try {
+    // Initialize Gemini
+    const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
+    const model = genAI ? genAI.getGenerativeModel({ model: 'gemini-3.6-flash' }) : null;
+
     // 1. Fetch Subscription Data
     console.log('Navigating to Subscription Data...');
-    await page.goto('https://ipowatch.in/ipo-subscription-status-today/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await gotoWithRetry(page, 'https://ipowatch.in/ipo-subscription-status-today/');
     const subRows = await page.locator('table tbody tr').all();
     for (const row of subRows) {
       const tds = await row.locator('td').allInnerTexts();
@@ -32,7 +68,7 @@ async function fetchIPOs() {
 
     for (const url of urls) {
       console.log(`Navigating to ${url}...`);
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await gotoWithRetry(page, url);
       
       const rows = await page.locator('figure.wp-block-table table tbody tr').all();
       console.log(`Found ${rows.length} rows on this page`);
@@ -97,7 +133,8 @@ async function fetchIPOs() {
       if (ipos[i].href) {
         console.log(`Fetching details for ${ipos[i].company_name}...`);
         try {
-          await page.goto(ipos[i].href, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          const success = await gotoWithRetry(page, ipos[i].href);
+          if (!success) continue;
           const text = await page.locator('body').innerText();
           
           // ── ISSUE SIZE ──
@@ -127,85 +164,27 @@ async function fetchIPOs() {
             }
           }
 
-          // ── PROMOTERS: extract from "The promoters of the company are..." sentence ──
-          // ipowatch.in always has this sentence in the "Promoters and Holding Pattern" section
-          const promoterSentenceMatch = text.match(/[Tt]he\s+promoters?\s+of\s+the\s+company\s+(?:is|are)\s+([^\n.]{5,400})/i);
-          if (promoterSentenceMatch) {
-            // Clean up trailing punctuation
-            ipos[i].promoters = promoterSentenceMatch[1].replace(/[.\s]+$/, '').trim();
-          } else {
-            // Fallback: search for Mr./Ms./Mrs./Dr. names in the promoter section
-            const promoterSectionIdx = text.indexOf('Promoters and Holding Pattern');
-            if (promoterSectionIdx !== -1) {
-              const section = text.substring(promoterSectionIdx, promoterSectionIdx + 800);
-              const nameMatches = section.match(/(?:Mr\.|Ms\.|Mrs\.|Dr\.)\s+[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*/g);
-              if (nameMatches && nameMatches.length > 0) {
-                ipos[i].promoters = nameMatches.join(', ');
-              }
-            }
-          }
-
-          // ── DOM TABLE EXTRACTION for Anchor Investors & QIB quota ──
-          // Table 4: Quota table  → contains 'QIB (Ex. Anchor)' and 'Retail'
-          // Table 5: Anchor table → contains 'Anchor Bidding Date'
-          // Both are separate; inspect all tables without early exit.
-          const allTables = await page.locator('table').all();
-          for (const table of allTables) {
-            const tableText = await table.innerText();
-
-            // ── QIB / INVESTOR CATEGORY QUOTA TABLE ──
-            // Unique signature: 'QIB (Ex. Anchor)' only appears in the quota reservation table
-            if (tableText.includes('QIB (Ex. Anchor)') && tableText.includes('Retail')) {
-              const tableRows = await table.locator('tr').all();
-              const quotaLines: string[] = [];
-              for (const row of tableRows) {
-                const cells = await row.locator('td, th').allInnerTexts();
-                if (cells.length >= 2) {
-                  const label = cells[0].trim();
-                  const shares = cells[1].trim();
-                  const pct = cells.length >= 3 ? cells[2].trim() : '';
-                  if (!label || label === 'Investor Category' || label === '-% Shares') continue;
-                  if (!shares || shares === 'Share Offered') continue;
-                  const cleanShares = shares.replace('[.]', 'TBA');
-                  const cleanPct = pct.replace('[.]', 'TBA').replace('-%', 'TBA');
-                  quotaLines.push(`${label}: ${cleanShares}${cleanPct ? ` (${cleanPct})` : ''}`);
-                }
-              }
-              if (quotaLines.length > 0) {
-                ipos[i].qib_details = quotaLines.join(' | ');
-              }
-            }
-
-            // ── ANCHOR INVESTORS DETAILS TABLE ──
-            // Unique signature: 'Anchor Bidding Date' only appears in the anchor details table
-            if (tableText.includes('Anchor Bidding Date')) {
-              const tableRows = await table.locator('tr').all();
-              let anchorDate = '';
-              let anchorSize = '';
-              let anchorList = '';
-              for (const row of tableRows) {
-                const cells = await row.locator('td, th').allInnerTexts();
-                if (cells.length >= 2) {
-                  const label = cells[0].trim();
-                  const value = cells[1].trim();
-                  if (label === 'Anchor Investors List' && value && !value.includes('[.]')) {
-                    anchorList = value;
-                  }
-                  if (label === 'Anchor Bidding Date' && value) {
-                    anchorDate = value;
-                  }
-                  if (label === 'Anchor Size' && value && !value.includes('[.]')) {
-                    anchorSize = value;
-                  }
-                }
-              }
-              if (anchorList) {
-                // Real investor names are published post-allocation
-                ipos[i].anchor_investors = anchorList;
-              } else if (anchorDate) {
-                // Anchor allocation is scheduled but names not yet published
-                ipos[i].anchor_investors = `Scheduled: ${anchorDate}${anchorSize ? ` | Size: ${anchorSize}` : ''}`;
-              }
+          // ── PROMOTERS, ANCHOR, QIB (Gemini Extraction) ──
+          if (model) {
+            try {
+              const prompt = `Extract the following details from this IPO webpage text. If a piece of data is completely missing, return null for that field. Return ONLY valid JSON:
+{
+  "promoters": "Comma separated list of promoter names",
+  "anchor_investors": "List of anchor investors or anchor schedule",
+  "qib_details": "Details about QIB quota or subscription"
+}
+Webpage text:
+${text.substring(0, 15000)}`;
+              const result = await model.generateContent(prompt);
+              const responseText = result.response.text();
+              const cleanJson = responseText.substring(responseText.indexOf('{'), responseText.lastIndexOf('}') + 1);
+              const parsed = JSON.parse(cleanJson);
+              
+              if (parsed.promoters) ipos[i].promoters = parsed.promoters;
+              if (parsed.anchor_investors) ipos[i].anchor_investors = parsed.anchor_investors;
+              if (parsed.qib_details) ipos[i].qib_details = parsed.qib_details;
+            } catch (err) {
+              console.error('Gemini extraction failed for', ipos[i].company_name);
             }
           }
 

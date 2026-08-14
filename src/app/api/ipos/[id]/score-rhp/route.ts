@@ -41,6 +41,11 @@ export async function POST(
       ofs_amount: ipo.ofs_amount,
       price_band: ipo.price_band,
       current_stage: ipo.current_stage,
+      promoters: ipo.promoters,
+      anchor_investors: ipo.anchor_investors,
+      qib_details: ipo.qib_details,
+      subscription_rate: ipo.subscription_rate,
+      gmp: ipo.gmp,
       sections: docs.length > 0 ? (docs[0].sections || {}) : {},
     });
 

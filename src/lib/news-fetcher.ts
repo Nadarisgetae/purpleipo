@@ -128,7 +128,7 @@ export async function fetchCompanyNews(companyName: string): Promise<RSSArticle[
   const allNews = await fetchMarketIPONews();
   const company = companyName.toLowerCase().split(' ').slice(0, 2).join(' ');
   const mentions = allNews.filter(a => a.title.toLowerCase().includes(company));
-  return mentions.length > 0 ? mentions : allNews.slice(0, 5);
+  return mentions;
 }
 
 /**

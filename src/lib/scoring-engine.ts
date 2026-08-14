@@ -231,6 +231,11 @@ export async function calculateRHPScore(ipoData: {
   ofs_amount?: string;
   price_band?: string;
   current_stage: number;
+  promoters?: string;
+  anchor_investors?: string;
+  qib_details?: string;
+  subscription_rate?: string;
+  gmp?: number;
   sections?: {
     risk_factors?: string;
     objects_of_issue?: string;
@@ -613,35 +618,54 @@ export async function calculateRHPScore(ipoData: {
   // -------------------------------------------------------------
   
   // E1: Anchor Investor Quality
-  const anchorScore = ipoData.current_stage >= 7 ? 8.8 : 7.0;
+  const e1Eval = await scoreQualitativeWithGemini(
+    'Anchor Investor Quality',
+    ipoData.anchor_investors || 'No anchor investor data disclosed yet.',
+    'Score 8-10 for presence of marquee global/domestic mutual funds; Score 0-4 for weak or no anchor participation.',
+    ipoData.current_stage >= 7 ? 8.8 : 7.0,
+    ipoData.anchor_investors ? `Extracted Anchor List: ${ipoData.anchor_investors.substring(0, 100)}...` : 'Anchor book details pending or not disclosed.'
+  );
   factors.push({
     factor_key: 'anchor_quality',
     category: 'Market Sentiment & Demand',
-    score: anchorScore,
-    confidence: 0.90,
-    evidence_text: 'Anchor book backed by leading global sovereign wealth and domestic mutual funds.',
-    source_section: 'Anchor Allotment List',
+    score: e1Eval.score,
+    confidence: e1Eval.confidence,
+    evidence_text: e1Eval.evidence,
+    source_section: 'Anchor Investor Data',
   });
 
   // E2: Subscription Levels
-  const subScore = ipoData.current_stage >= 8 ? 8.5 : 7.0;
+  const e2Eval = await scoreQualitativeWithGemini(
+    'Subscription Levels & QIB Demand',
+    `Subscription Rate: ${ipoData.subscription_rate || 'N/A'}, QIB Details: ${ipoData.qib_details || 'N/A'}`,
+    'Score 8-10 for high oversubscription (especially QIB); Score 0-4 for undersubscription.',
+    ipoData.current_stage >= 8 ? 8.5 : 7.0,
+    ipoData.subscription_rate ? `Subscription rate tracked at ${ipoData.subscription_rate}.` : 'Subscription metrics pending or not available.'
+  );
   factors.push({
     factor_key: 'subscription_levels',
     category: 'Market Sentiment & Demand',
-    score: subScore,
-    confidence: 0.95,
-    evidence_text: 'Heavy QIB institutional demand recorded during public bidding window.',
+    score: e2Eval.score,
+    confidence: e2Eval.confidence,
+    evidence_text: e2Eval.evidence,
     source_section: 'Exchange Bidding Data',
   });
 
   // E3: Market Conditions & Peer Performance
+  const e3Eval = await scoreQualitativeWithGemini(
+    'Market Conditions & GMP',
+    `Current GMP: ${ipoData.gmp ? '₹' + ipoData.gmp : 'N/A'}`,
+    'Score 8-10 for high GMP indicating strong grey market premium; Score 0-4 for negative/flat GMP.',
+    8.0,
+    ipoData.gmp ? `Grey Market Premium (GMP) is active at ₹${ipoData.gmp}.` : 'Market conditions and GMP tracking are stable.'
+  );
   factors.push({
     factor_key: 'market_conditions',
     category: 'Market Sentiment & Demand',
-    score: 8.0,
-    confidence: 0.85,
-    evidence_text: 'Healthy broader market appetite with recent sector IPOs listing at positive premiums.',
-    source_section: 'Market Data Snapshots',
+    score: e3Eval.score,
+    confidence: e3Eval.confidence,
+    evidence_text: e3Eval.evidence,
+    source_section: 'Grey Market Data',
   });
 
   // -------------------------------------------------------------

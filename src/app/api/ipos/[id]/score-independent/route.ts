@@ -23,15 +23,7 @@ export async function POST(
       return NextResponse.json({ success: false, message: 'IPO not found' }, { status: 404 });
     }
 
-    // 2. Compute Layer 2 Independent Signals Score
-    const signalResult = await calculateIndependentScore({
-      current_stage: ipo.current_stage,
-      sector: ipo.sector,
-      price_band: ipo.price_band,
-      issue_size: ipo.issue_size,
-    });
-
-    // 3. Fetch latest snapshot values for RHP & News
+    // 2. Fetch latest snapshot values for RHP & News
     const [latestSnapshot] = await sql`
       SELECT rhp_score, news_score FROM score_snapshots
       WHERE ipo_id = ${ipoId} ORDER BY created_at DESC LIMIT 1;
@@ -39,6 +31,19 @@ export async function POST(
 
     const rhpVal = latestSnapshot?.rhp_score ?? 72.0;
     const newsVal = latestSnapshot?.news_score ?? 75.0;
+
+    // 3. Compute Layer 2 Independent Signals Score
+    const signalResult = await calculateIndependentScore({
+      current_stage: ipo.current_stage,
+      sector: ipo.sector,
+      price_band: ipo.price_band,
+      issue_size: ipo.issue_size,
+      rhp_score: rhpVal,
+      subscription_rate: ipo.subscription_rate,
+      anchor_investors: ipo.anchor_investors
+    });
+
+
 
     // 4. Recompute composite score
     const compositeScore = (rhpVal * 0.5) + (signalResult.independent_score * 0.3) + (newsVal * 0.2);
