@@ -62,10 +62,12 @@ try {
       type VARCHAR(20) NOT NULL CHECK (type IN ('DRHP', 'RHP')),
       file_url TEXT NOT NULL,
       filed_date DATE,
-      parsed_at TIMESTAMP WITH TIME ZONE
+      parsed_at TIMESTAMP WITH TIME ZONE,
+      sections JSONB
     );
   `;
-  console.log('  ✓ Table created: ipo_documents');
+  await sql`ALTER TABLE ipo_documents ADD COLUMN IF NOT EXISTS sections JSONB;`;
+  console.log('  ✓ Table created/updated: ipo_documents');
 
   // 5. Factor Scores table
   await sql`
