@@ -6,7 +6,7 @@ import {
   UploadCloud, ShieldCheck, Scale, Cpu, ChevronDown, ChevronUp,
   Activity, BarChart3, Zap, Globe, Sigma, AlertTriangle, CheckCircle2,
   Minus, ThumbsUp, ThumbsDown, History, TrendingUp, TrendingDown, Clock,
-  ListChecks,
+  ListChecks, Users, Anchor, UserCheck,
 } from 'lucide-react';
 import { IPOItem } from './KanbanBoard';
 import ScoreHistoryChart from './ScoreHistoryChart';
@@ -105,6 +105,7 @@ export default function IPODetailModal({ ipo, onClose }: IPODetailModalProps) {
   const [headlines, setHeadlines] = useState<Headline[]>([]);
   const [newsSummary, setNewsSummary] = useState('');
   const [newsStats, setNewsStats] = useState({ pos: 0, neg: 0, neu: 0 });
+  const [showPromotersView, setShowPromotersView] = useState(true);
 
   // History tab state
   interface StageSeries { stage: number; composite: number; rhp: number; independent: number; news: number; }
@@ -409,37 +410,95 @@ export default function IPODetailModal({ ipo, onClose }: IPODetailModalProps) {
                 ))}
               </div>
 
-              {/* Extra Details */}
-              {(ipo.promoters || ipo.anchor_investors || ipo.qib_details) && (
-                <div className="glass-panel p-5 rounded-2xl space-y-4 border border-slate-800 text-xs">
-                  <h4 className="font-bold text-sm text-white flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-emerald-400" />
-                    Company & Subscription Details
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {ipo.promoters && (
-                      <div className="space-y-1">
-                        <span className="text-slate-500 font-semibold block uppercase tracking-wider text-[10px]">Promoters</span>
-                        <p className="text-slate-200 leading-relaxed">{ipo.promoters}</p>
-                      </div>
-                    )}
-                    <div className="space-y-3">
-                      {ipo.anchor_investors && (
-                        <div className="space-y-1">
-                          <span className="text-slate-500 font-semibold block uppercase tracking-wider text-[10px]">Anchor Investors</span>
-                          <p className="text-slate-200 leading-relaxed">{ipo.anchor_investors}</p>
-                        </div>
-                      )}
-                      {ipo.qib_details && (
-                        <div className="space-y-1">
-                          <span className="text-slate-500 font-semibold block uppercase tracking-wider text-[10px]">QIB Details</span>
-                          <p className="text-slate-200 leading-relaxed">{ipo.qib_details}</p>
-                        </div>
-                      )}
+              {/* ── Promoters List & Institutional Backers Feature Card ── */}
+              <div className="glass-panel p-5 rounded-2xl space-y-4 border border-purple-500/20 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-300">
+                      <Users className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-sm text-white flex items-center gap-2">
+                        Promoters List & Key Institutional Backers
+                      </h4>
+                      <p className="text-[11px] text-slate-400">Promoter disclosures, Anchor Investor lists & Qualified Institutional Buyers (QIBs)</p>
                     </div>
                   </div>
+
+                  <button
+                    onClick={() => setShowPromotersView(!showPromotersView)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 text-xs font-bold transition-all cursor-pointer shrink-0"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>{showPromotersView ? 'Promoters List' : 'Show Promoters List'}</span>
+                    {showPromotersView ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
-              )}
+
+                {showPromotersView && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                    {/* 1. Promoters List */}
+                    <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                            <UserCheck className="w-3.5 h-3.5 text-purple-400" />
+                            Promoters List
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold border ${
+                            ipo.promoters ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'
+                          }`}>
+                            {ipo.promoters ? 'Disclosed' : 'Data not shared'}
+                          </span>
+                        </div>
+                        <p className="text-slate-200 leading-relaxed font-medium">
+                          {ipo.promoters || 'Data not shared'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 2. Anchor Investors */}
+                    <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                            <Anchor className="w-3.5 h-3.5 text-indigo-400" />
+                            Anchor Investors
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold border ${
+                            ipo.anchor_investors ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'
+                          }`}>
+                            {ipo.anchor_investors ? 'Disclosed' : 'Data not shared'}
+                          </span>
+                        </div>
+                        <p className="text-slate-200 leading-relaxed font-medium">
+                          {ipo.anchor_investors || 'Data not shared'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 3. QIB Buyers */}
+                    <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5 text-emerald-400" />
+                            QIB Buyers
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold border ${
+                            ipo.qib_details ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'
+                          }`}>
+                            {ipo.qib_details ? 'Disclosed' : 'Data not shared'}
+                          </span>
+                        </div>
+                        <p className="text-slate-200 leading-relaxed font-medium">
+                          {ipo.qib_details || 'Data not shared'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Timeline */}
               <div className="glass-panel p-5 rounded-2xl space-y-3 border border-slate-800">

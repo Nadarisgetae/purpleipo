@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { 
   Building2, TrendingUp, Calendar, ChevronRight, Filter, Search, Sparkles, 
-  ArrowUpRight, AlertTriangle, ShieldCheck, Tag, Clock, CheckCircle2
+  ArrowUpRight, AlertTriangle, ShieldCheck, Tag, Clock, CheckCircle2, Users
 } from 'lucide-react';
 import { getBiddingStatus } from '@/lib/bidding-status';
 
@@ -266,12 +266,26 @@ export default function KanbanBoard({ ipos, onSelectIPO }: KanbanBoardProps) {
 
                         {/* Bottom: Status & Score Badge */}
                         <div className="pt-1 flex items-center justify-between gap-1 flex-wrap">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${statusInfo.badgeBg} ${statusInfo.badgeText} ${statusInfo.badgeBorder}`}>
-                            {statusInfo.shortLabel}
-                          </span>
-                          <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold border ${badge.bg}`}>
-                            {badge.label}
-                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectIPO(ipo);
+                            }}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-500/15 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 transition-all cursor-pointer"
+                            title="View Promoters List, Anchor Investors & QIB details"
+                          >
+                            <Users className="w-3 h-3 text-purple-400" />
+                            <span>Promoters List</span>
+                          </button>
+
+                          <div className="flex items-center gap-1">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${statusInfo.badgeBg} ${statusInfo.badgeText} ${statusInfo.badgeBorder}`}>
+                              {statusInfo.shortLabel}
+                            </span>
+                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold border ${badge.bg}`}>
+                              {badge.label}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     );
