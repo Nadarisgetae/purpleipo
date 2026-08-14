@@ -3,13 +3,15 @@
 import React, { useState } from 'react';
 import { 
   Building2, TrendingUp, Calendar, ChevronRight, Filter, Search, Sparkles, 
-  ArrowUpRight, AlertTriangle, ShieldCheck, Tag
+  ArrowUpRight, AlertTriangle, ShieldCheck, Tag, Clock, CheckCircle2
 } from 'lucide-react';
+import { getBiddingStatus } from '@/lib/bidding-status';
 
 export interface IPOItem {
   id: string;
   company_name: string;
   sector: string;
+  type: string | null;
   cin: string;
   current_stage: number;
   issue_size: string;
@@ -27,6 +29,11 @@ export interface IPOItem {
   independent_score: number | null;
   news_score: number | null;
   composite_score: number | null;
+  promoters?: string | null;
+  qib_details?: string | null;
+  anchor_investors?: string | null;
+  rating_score?: number | null;
+  gmp?: number | null;
 }
 
 const LIFECYCLE_STAGES = [
@@ -62,7 +69,7 @@ interface KanbanBoardProps {
 
 export default function KanbanBoard({ ipos, onSelectIPO }: KanbanBoardProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'active' | 'rhp' | 'listed'>('all');
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'open' | 'upcoming' | 'closed' | 'rhp' | 'listed'>('all');
 
   const filteredIPOs = ipos.filter((ipo) => {
     const matchesSearch =
@@ -70,11 +77,20 @@ export default function KanbanBoard({ ipos, onSelectIPO }: KanbanBoardProps) {
       (ipo.sector && ipo.sector.toLowerCase().includes(searchTerm.toLowerCase()));
 
     if (!matchesSearch) return false;
-    if (selectedFilter === 'active') return ipo.current_stage === 8;
+
+    const statusState = getBiddingStatus(ipo.issue_open_date, ipo.issue_close_date, ipo.current_stage).state;
+
+    if (selectedFilter === 'open') return statusState === 'OPEN';
+    if (selectedFilter === 'upcoming') return statusState === 'UPCOMING';
+    if (selectedFilter === 'closed') return statusState === 'CLOSED';
     if (selectedFilter === 'rhp') return ipo.current_stage >= 5 && ipo.current_stage <= 9;
     if (selectedFilter === 'listed') return ipo.current_stage === 12;
     return true;
   });
+
+  const openCount = ipos.filter((i) => getBiddingStatus(i.issue_open_date, i.issue_close_date, i.current_stage).state === 'OPEN').length;
+  const upcomingCount = ipos.filter((i) => getBiddingStatus(i.issue_open_date, i.issue_close_date, i.current_stage).state === 'UPCOMING').length;
+  const closedCount = ipos.filter((i) => getBiddingStatus(i.issue_open_date, i.issue_close_date, i.current_stage).state === 'CLOSED').length;
 
   return (
     <div className="space-y-6">
@@ -95,10 +111,10 @@ export default function KanbanBoard({ ipos, onSelectIPO }: KanbanBoardProps) {
         </div>
 
         {/* Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 text-xs">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs flex-wrap">
           <button
             onClick={() => setSelectedFilter('all')}
-            className={`px-3 py-1.5 rounded-lg border font-medium transition-all ${
+            className={`px-3 py-1.5 rounded-lg border font-medium transition-all cursor-pointer ${
               selectedFilter === 'all'
                 ? 'bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-600/30'
                 : 'bg-slate-900/60 text-slate-400 border-slate-700 hover:text-white'
@@ -107,34 +123,45 @@ export default function KanbanBoard({ ipos, onSelectIPO }: KanbanBoardProps) {
             All IPOs ({ipos.length})
           </button>
           <button
-            onClick={() => setSelectedFilter('active')}
-            className={`px-3 py-1.5 rounded-lg border font-medium transition-all ${
-              selectedFilter === 'active'
+            onClick={() => setSelectedFilter('open')}
+            className={`px-3 py-1.5 rounded-lg border font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+              selectedFilter === 'open'
                 ? 'bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-600/30'
+                : 'bg-slate-900/60 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <span>Open Bidding ({openCount})</span>
+          </button>
+          <button
+            onClick={() => setSelectedFilter('upcoming')}
+            className={`px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer ${
+              selectedFilter === 'upcoming'
+                ? 'bg-amber-600 text-white border-amber-500 shadow-md shadow-amber-600/30'
+                : 'bg-slate-900/60 text-amber-400 border-amber-500/30 hover:bg-amber-500/10'
+            }`}
+          >
+            Starts Soon ({upcomingCount})
+          </button>
+          <button
+            onClick={() => setSelectedFilter('closed')}
+            className={`px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer ${
+              selectedFilter === 'closed'
+                ? 'bg-rose-900/80 text-rose-200 border-rose-600'
                 : 'bg-slate-900/60 text-slate-400 border-slate-700 hover:text-white'
             }`}
           >
-            Live Bidding ({ipos.filter((i) => i.current_stage === 8).length})
+            Closed ({closedCount})
           </button>
           <button
             onClick={() => setSelectedFilter('rhp')}
-            className={`px-3 py-1.5 rounded-lg border font-medium transition-all ${
+            className={`px-3 py-1.5 rounded-lg border font-medium transition-all cursor-pointer ${
               selectedFilter === 'rhp'
                 ? 'bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-600/30'
                 : 'bg-slate-900/60 text-slate-400 border-slate-700 hover:text-white'
             }`}
           >
             RHP Active ({ipos.filter((i) => i.current_stage >= 5 && i.current_stage <= 9).length})
-          </button>
-          <button
-            onClick={() => setSelectedFilter('listed')}
-            className={`px-3 py-1.5 rounded-lg border font-medium transition-all ${
-              selectedFilter === 'listed'
-                ? 'bg-slate-700 text-white border-slate-600'
-                : 'bg-slate-900/60 text-slate-400 border-slate-700 hover:text-white'
-            }`}
-          >
-            Listed ({ipos.filter((i) => i.current_stage === 12).length})
           </button>
         </div>
 
@@ -172,6 +199,7 @@ export default function KanbanBoard({ ipos, onSelectIPO }: KanbanBoardProps) {
                 ) : (
                   stageIPOs.map((ipo) => {
                     const badge = getScoreBadge(ipo.composite_score);
+                    const statusInfo = getBiddingStatus(ipo.issue_open_date, ipo.issue_close_date, ipo.current_stage);
 
                     return (
                       <div
@@ -192,7 +220,18 @@ export default function KanbanBoard({ ipos, onSelectIPO }: KanbanBoardProps) {
                             </h4>
                             <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-purple-400 transition-colors shrink-0" />
                           </div>
-                          <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{ipo.sector}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {ipo.type && (
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                ipo.type.toLowerCase().includes('sme')
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' 
+                                  : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                              }`}>
+                                {ipo.type.toUpperCase()}
+                              </span>
+                            )}
+                            <p className="text-[11px] text-slate-400 line-clamp-1">{ipo.sector}</p>
+                          </div>
                         </div>
 
                         {/* Middle Details: Issue Size & Price */}
@@ -207,8 +246,29 @@ export default function KanbanBoard({ ipos, onSelectIPO }: KanbanBoardProps) {
                           </div>
                         </div>
 
-                        {/* Bottom: Score Badge */}
-                        <div className="pt-1 flex items-center justify-between">
+                        {/* Extra Details: GMP & Rating */}
+                        {(ipo.gmp != null || ipo.rating_score != null) && (
+                          <div className="flex items-center gap-3 text-[11px] px-1">
+                            {ipo.gmp != null && (
+                              <div className="flex items-center gap-1 text-emerald-400">
+                                <TrendingUp className="w-3 h-3" />
+                                <span className="font-semibold">₹{ipo.gmp} GMP</span>
+                              </div>
+                            )}
+                            {ipo.rating_score != null && (
+                              <div className="flex items-center gap-1 text-amber-400">
+                                <Sparkles className="w-3 h-3" />
+                                <span className="font-semibold">{ipo.rating_score} / 10</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Bottom: Status & Score Badge */}
+                        <div className="pt-1 flex items-center justify-between gap-1 flex-wrap">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${statusInfo.badgeBg} ${statusInfo.badgeText} ${statusInfo.badgeBorder}`}>
+                            {statusInfo.shortLabel}
+                          </span>
                           <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold border ${badge.bg}`}>
                             {badge.label}
                           </span>

@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { fetchCompanyNews } from './news-fetcher';
 
 export interface NewsSentimentResult {
   news_score: number; // 0–100
@@ -27,7 +28,11 @@ export async function calculateNewsScore(ipoData: {
   company_name: string;
   sector: string;
 }): Promise<NewsSentimentResult> {
-  // Simulated news headlines (in production these come from RSS feeds fetched in /api/news)
+  // Fetch real headlines from RSS feeds
+  const rssArticles = await fetchCompanyNews(ipoData.company_name);
+  const realHeadlines = rssArticles.map(a => a.title);
+
+  // Fallback to sample if no RSS articles found (rare but possible)
   const sampleHeadlines = [
     `${ipoData.company_name} IPO oversubscribed 28x on Day 1 — strong QIB demand`,
     `${ipoData.company_name} reports 32% revenue jump in Q1 ahead of public issue`,
@@ -35,6 +40,8 @@ export async function calculateNewsScore(ipoData: {
     `${ipoData.sector} sector tailwinds boost ${ipoData.company_name} market outlook`,
     `${ipoData.company_name} promoters pledge zero shares — clean governance signal`,
   ];
+  
+  const headlinesToAnalyze = realHeadlines.length > 0 ? realHeadlines : sampleHeadlines;
 
   let top_headlines: NewsSentimentResult['top_headlines'] = [];
   let news_score = 74.0;
@@ -45,7 +52,7 @@ export async function calculateNewsScore(ipoData: {
       const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
       const prompt = `
 You are an expert IPO market analyst. Analyze these news headlines for "${ipoData.company_name}" (${ipoData.sector} sector):
-${sampleHeadlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}
+${headlinesToAnalyze.map((h, i) => `${i + 1}. ${h}`).join('\n')}
 
 For each headline, classify as positive/negative/neutral and assign an impact_score (0-10).
 Then compute an aggregate news_score (0-100) based on the weighted sentiment.
@@ -71,7 +78,7 @@ Respond ONLY in valid JSON format:
         title: h.title || '',
         sentiment: (['positive', 'negative', 'neutral'].includes(h.sentiment || '') ? h.sentiment : 'neutral') as 'positive' | 'negative' | 'neutral',
         impact_score: Number(h.impact_score) || 5,
-        source: h.source || 'Business Standard',
+        source: h.source || 'Financial Media',
         date: h.date || new Date().toISOString().split('T')[0],
       }));
     } catch (err) {
@@ -80,13 +87,13 @@ Respond ONLY in valid JSON format:
   }
 
   if (top_headlines.length === 0) {
-    top_headlines = sampleHeadlines.map((title, i) => ({
+    top_headlines = headlinesToAnalyze.map((title, i) => ({
       title,
-      sentiment: i < 3 ? 'positive' : i === 2 ? 'negative' : 'neutral',
-      impact_score: 7 - i * 0.5,
-      source: ['Moneycontrol', 'Economic Times', 'Business Standard', 'LiveMint', 'NDTV Profit'][i] || 'Moneycontrol',
+      sentiment: (i < Math.ceil(headlinesToAnalyze.length / 2) ? 'positive' : 'neutral') as 'positive' | 'negative' | 'neutral',
+      impact_score: 5,
+      source: 'Financial Media',
       date: new Date().toISOString().split('T')[0],
-    }));
+    })).slice(0, 5);
   }
 
   const pos = top_headlines.filter((h) => h.sentiment === 'positive').length;

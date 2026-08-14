@@ -20,9 +20,15 @@ export async function GET() {
         i.issue_open_date,
         i.issue_close_date,
         i.listing_date,
+        i.promoters,
+        i.qib_details,
+        i.anchor_investors,
+        i.rating_score,
+        i.gmp,
         i.created_at,
         c.name as company_name,
         c.sector,
+        c.type,
         c.cin,
         s.rhp_score,
         s.independent_score,
@@ -48,6 +54,8 @@ export async function GET() {
       independent_score: i.independent_score != null ? Number(i.independent_score) : null,
       news_score: i.news_score != null ? Number(i.news_score) : null,
       composite_score: i.composite_score != null ? Number(i.composite_score) : null,
+      rating_score: i.rating_score != null ? Number(i.rating_score) : null,
+      gmp: i.gmp != null ? Number(i.gmp) : null,
     }));
 
     return NextResponse.json({ success: true, count: formattedData.length, data: formattedData });

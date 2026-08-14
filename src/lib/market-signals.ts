@@ -1,3 +1,5 @@
+import sql from '@/lib/db';
+
 export interface IndependentScoreResult {
   independent_score: number; // 0 to 100
   subgroups: {
@@ -27,10 +29,19 @@ export async function calculateIndependentScore(ipoData: {
   const stage = ipoData.current_stage;
 
   // 1. Technicals & Macro Signals
-  const nifty_level = 24350.5;
-  const india_vix = 14.2; // <15 calm, >20 nervous
+  // Fetch latest market data snapshot
+  const [latestMacro] = await sql`
+    SELECT * FROM market_data_snapshots ORDER BY date DESC LIMIT 1;
+  `;
+
+  // Fallbacks if data doesn't exist yet
+  const nifty_level = latestMacro?.nifty_level ? Number(latestMacro.nifty_level) : 24350.5;
+  const india_vix = latestMacro?.india_vix ? Number(latestMacro.india_vix) : 14.2; 
+  
+  // Scoring logic
   const vixScore = india_vix < 15 ? 8.5 : india_vix < 20 ? 6.5 : 4.0;
-  const macroScore = 8.0; // Bullish Nifty trend
+  // If nifty is above 24000, we consider it bullish (simplified for MVP)
+  const macroScore = nifty_level > 24000 ? 8.0 : nifty_level > 22000 ? 6.5 : 4.0; 
 
   const technicalsAvg = (vixScore + macroScore) / 2; // 0-10
 
@@ -56,9 +67,9 @@ export async function calculateIndependentScore(ipoData: {
       demand_subscription: Number((demandAvg * 10).toFixed(1)),
     },
     details: {
-      nifty_trend: 'Bullish (+2.4% over 30 days)',
+      nifty_trend: `Nifty at ${nifty_level} (Score: ${macroScore * 10}/100)`,
       india_vix: india_vix,
-      fii_dii_flow: 'Net Positive DII Buying (+₹14,250 Cr)',
+      fii_dii_flow: 'Neutral Flow (Live FII/DII data pending integration)',
       dcf_valuation_gap: 'Intrinsic DCF value is +14.2% above top price band',
       anchor_quality_score: Number((anchorScore * 10).toFixed(1)),
       subscription_multiples: stage >= 8 ? 'QIB: 24.5x, HNI: 12.8x, Retail: 4.2x' : 'Bidding opens at Stage 8',

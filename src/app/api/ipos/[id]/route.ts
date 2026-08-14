@@ -15,6 +15,7 @@ export async function GET(
         i.*,
         c.name as company_name,
         c.sector,
+        c.type,
         c.cin
       FROM ipos i
       JOIN companies c ON i.company_id = c.id

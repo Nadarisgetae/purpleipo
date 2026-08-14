@@ -39,3 +39,7 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Scraping dumps
+*.html
+

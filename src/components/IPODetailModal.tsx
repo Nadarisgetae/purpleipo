@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { IPOItem } from './KanbanBoard';
 import ScoreHistoryChart from './ScoreHistoryChart';
+import { getBiddingStatus } from '@/lib/bidding-status';
 
 interface FactorScore {
   factor_key: string;
@@ -249,6 +250,8 @@ export default function IPODetailModal({ ipo, onClose }: IPODetailModalProps) {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
+  const biddingStatus = getBiddingStatus(ipo.issue_open_date, ipo.issue_close_date, ipo.current_stage);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
       <div className="relative w-full max-w-4xl glass-panel-glow rounded-3xl border border-purple-500/20 shadow-2xl overflow-hidden my-8">
@@ -256,9 +259,12 @@ export default function IPODetailModal({ ipo, onClose }: IPODetailModalProps) {
         {/* ── Header ────────────────────────────────────────────────── */}
         <div className="p-6 sm:p-8 bg-gradient-to-r from-purple-950/40 via-slate-900/60 to-slate-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-purple-500/15">
           <div>
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/20">
                 Stage {ipo.current_stage} • Active Lifecycle
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${biddingStatus.badgeBg} ${biddingStatus.badgeText} ${biddingStatus.badgeBorder}`}>
+                {biddingStatus.label}
               </span>
               <span className="text-xs text-slate-400">{ipo.sector}</span>
             </div>
@@ -320,6 +326,55 @@ export default function IPODetailModal({ ipo, onClose }: IPODetailModalProps) {
           {/* ── TAB 1: OVERVIEW ─────────────────────────────────────── */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+
+              {/* ── Bidding Availability Status Card ── */}
+              <div className={`p-5 rounded-2xl bg-gradient-to-r ${biddingStatus.cardBg} border ${biddingStatus.cardBorder} shadow-xl space-y-3`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                  <div className="flex items-center gap-3">
+                    {biddingStatus.state === 'OPEN' && (
+                      <div className="relative flex items-center justify-center shrink-0">
+                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-ping absolute" />
+                        <CheckCircle2 className="w-6 h-6 text-emerald-400 relative z-10" />
+                      </div>
+                    )}
+                    {biddingStatus.state === 'CLOSED' && (
+                      <AlertTriangle className="w-6 h-6 text-rose-400 shrink-0" />
+                    )}
+                    {biddingStatus.state === 'UPCOMING' && (
+                      <Clock className="w-6 h-6 text-amber-400 shrink-0" />
+                    )}
+                    {biddingStatus.state === 'TBA' && (
+                      <Clock className="w-6 h-6 text-slate-400 shrink-0" />
+                    )}
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Bidding Availability Status</span>
+                      <h3 className="text-base sm:text-lg font-black text-white">{biddingStatus.headline}</h3>
+                    </div>
+                  </div>
+
+                  <span className={`px-3 py-1 rounded-full text-xs font-black border uppercase tracking-wide shrink-0 ${biddingStatus.badgeBg} ${biddingStatus.badgeText} ${biddingStatus.badgeBorder}`}>
+                    {biddingStatus.label}
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                  {biddingStatus.description}
+                </p>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs pt-1">
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <Zap className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                    <span className="font-semibold text-purple-200">{biddingStatus.actionAdvice}</span>
+                  </div>
+
+                  <div className="flex items-center gap-3 font-semibold text-slate-300">
+                    <span>Opens: <span className="text-white font-bold">{ipo.issue_open_date || 'TBA'}</span></span>
+                    <span className="text-slate-600">•</span>
+                    <span>Closes: <span className="text-white font-bold">{ipo.issue_close_date || 'TBA'}</span></span>
+                  </div>
+                </div>
+              </div>
+
               {/* Score Overview Cards */}
               <div className="grid grid-cols-3 gap-3">
                 {[
@@ -353,6 +408,38 @@ export default function IPODetailModal({ ipo, onClose }: IPODetailModalProps) {
                   </div>
                 ))}
               </div>
+
+              {/* Extra Details */}
+              {(ipo.promoters || ipo.anchor_investors || ipo.qib_details) && (
+                <div className="glass-panel p-5 rounded-2xl space-y-4 border border-slate-800 text-xs">
+                  <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-emerald-400" />
+                    Company & Subscription Details
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {ipo.promoters && (
+                      <div className="space-y-1">
+                        <span className="text-slate-500 font-semibold block uppercase tracking-wider text-[10px]">Promoters</span>
+                        <p className="text-slate-200 leading-relaxed">{ipo.promoters}</p>
+                      </div>
+                    )}
+                    <div className="space-y-3">
+                      {ipo.anchor_investors && (
+                        <div className="space-y-1">
+                          <span className="text-slate-500 font-semibold block uppercase tracking-wider text-[10px]">Anchor Investors</span>
+                          <p className="text-slate-200 leading-relaxed">{ipo.anchor_investors}</p>
+                        </div>
+                      )}
+                      {ipo.qib_details && (
+                        <div className="space-y-1">
+                          <span className="text-slate-500 font-semibold block uppercase tracking-wider text-[10px]">QIB Details</span>
+                          <p className="text-slate-200 leading-relaxed">{ipo.qib_details}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Timeline */}
               <div className="glass-panel p-5 rounded-2xl space-y-3 border border-slate-800">
