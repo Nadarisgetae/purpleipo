@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { fetchAndParseSingleIPORHP } from '../../../../lib/scrapers/pdfFetcher';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const { ipoId } = await request.json();

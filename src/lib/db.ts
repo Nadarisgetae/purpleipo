@@ -1,23 +1,22 @@
 import postgres from 'postgres';
-import * as dotenv from 'dotenv';
-import * as path from 'path';
-
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const globalForDb = global as unknown as {
   sql: postgres.Sql | undefined;
 };
 
-function getDb() {
+function createSqlInstance(): postgres.Sql {
   const dbUrl = process.env.DATABASE_URL;
 
   if (!dbUrl) {
-    throw new Error('DATABASE_URL environment variable is missing. Add it in .env.local.');
+    // Provide a dummy connection string during static build analysis to avoid ERR_INVALID_URL
+    return postgres('postgres://dummy:dummy@localhost:5432/dummy', {
+      ssl: false,
+      max: 1,
+      idle_timeout: 1,
+      connect_timeout: 1,
+    });
   }
 
-  // Disable TLS certificate verification since we are connecting to a serverless pooler
-  // and need stable connections.
   return postgres(dbUrl, {
     ssl: { rejectUnauthorized: false },
     max: 10,
@@ -26,10 +25,28 @@ function getDb() {
   });
 }
 
-export const sql = globalForDb.sql || getDb();
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForDb.sql = sql;
+// Lazy initialization or global cache to prevent build-time crashes on Vercel
+export function getDb(): postgres.Sql {
+  if (!globalForDb.sql) {
+    globalForDb.sql = createSqlInstance();
+  }
+  return globalForDb.sql;
 }
+
+// Proxy wrapper so existing tagged template `sql\`...\`` syntax continues to work transparently
+export const sql: postgres.Sql = new Proxy((() => {}) as any, {
+  apply(_target, thisArg, argArray: any) {
+    const client = getDb();
+    return (client as any).apply(thisArg, argArray);
+  },
+  get(_target, prop) {
+    const client = getDb();
+    const val = (client as any)[prop];
+    if (typeof val === 'function') {
+      return val.bind(client);
+    }
+    return val;
+  },
+});
 
 export default sql;

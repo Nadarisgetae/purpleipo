@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { scrapeChittorgarhIPOs } from '../../../../lib/scrapers/chittorgarh';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST() {
   try {
     // Run the scraper asynchronously so Vercel serverless doesn't time out

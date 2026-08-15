@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { scrapeDRHP } from '../../../../lib/scrapers/pdfFetcher';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST() {
   try {
     console.log('Manual trigger: Starting PDF fetcher...');
