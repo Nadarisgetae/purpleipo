@@ -47,6 +47,22 @@ export default function KanbanBoard({ initialIpos }: KanbanBoardProps) {
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [selectedIpoId, setSelectedIpoId] = useState<string | null>(null);
 
+  // Dynamic market cap detection helper
+  const getIPOCapCategory = (ipo: IPO): 'Large Cap' | 'Mid Cap' | 'Small Cap' | 'SME' => {
+    const isSme = ipo.board_type === 'SME' || ipo.category_tag?.toLowerCase().includes('sme');
+    if (isSme) return 'SME';
+
+    const tag = (ipo.category_tag || '').toLowerCase();
+    if (tag.includes('large')) return 'Large Cap';
+    if (tag.includes('mid')) return 'Mid Cap';
+    if (tag.includes('small')) return 'Small Cap';
+
+    const sizeNum = ipo.issue_size ? parseFloat(ipo.issue_size.replace(/,/g, '')) : 0;
+    if (sizeNum >= 1500) return 'Large Cap';
+    if (sizeNum >= 500) return 'Mid Cap';
+    return 'Small Cap';
+  };
+
   // Filter IPOs by search term and market cap category
   const filteredIpos = ipos.filter(ipo => {
     const matchesSearch =
@@ -55,14 +71,20 @@ export default function KanbanBoard({ initialIpos }: KanbanBoardProps) {
       (ipo.category_tag && ipo.category_tag.toLowerCase().includes(search.toLowerCase()));
 
     if (!matchesSearch) return false;
-
     if (selectedFilter === 'All') return true;
-    if (selectedFilter === 'Large Cap') return ipo.category_tag?.toLowerCase().includes('large');
-    if (selectedFilter === 'Mid Cap') return ipo.category_tag?.toLowerCase().includes('mid');
-    if (selectedFilter === 'Small Cap') return ipo.category_tag?.toLowerCase().includes('small');
-    if (selectedFilter === 'SME') return ipo.board_type === 'SME' || ipo.category_tag?.toLowerCase().includes('sme');
-    return true;
+
+    const cap = getIPOCapCategory(ipo);
+    return cap === selectedFilter;
   });
+
+  // Calculate live counts for each filter pill
+  const filterCounts: Record<string, number> = {
+    'All': ipos.length,
+    'Large Cap': ipos.filter(i => getIPOCapCategory(i) === 'Large Cap').length,
+    'Mid Cap': ipos.filter(i => getIPOCapCategory(i) === 'Mid Cap').length,
+    'Small Cap': ipos.filter(i => getIPOCapCategory(i) === 'Small Cap').length,
+    'SME': ipos.filter(i => getIPOCapCategory(i) === 'SME').length,
+  };
 
   // Helper for recommendation band color
   const getScoreColor = (score: number | null) => {
@@ -84,28 +106,28 @@ export default function KanbanBoard({ initialIpos }: KanbanBoardProps) {
   };
 
   // Helper for Market Cap Category Tag Badge
-  const getCategoryBadge = (tag: string | null, boardType: string | null) => {
+  const getCategoryBadge = (tag: string | null, boardType: string | null, issueSize: string | null) => {
     const cleanTag = tag || (boardType === 'SME' ? 'SME IPO' : 'Mainboard');
-    if (cleanTag.toLowerCase().includes('large')) {
+    if (cleanTag.toLowerCase().includes('large') || (issueSize && parseFloat(issueSize.replace(/,/g, '')) >= 1500 && boardType !== 'SME')) {
       return {
-        label: cleanTag,
+        label: tag || 'Mainboard - Large Cap',
         style: 'bg-purple-500/15 text-purple-300 border-purple-500/30'
       };
     }
-    if (cleanTag.toLowerCase().includes('mid')) {
+    if (cleanTag.toLowerCase().includes('mid') || (issueSize && parseFloat(issueSize.replace(/,/g, '')) >= 500 && boardType !== 'SME')) {
       return {
-        label: cleanTag,
+        label: tag || 'Mainboard - Mid Cap',
         style: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
       };
     }
-    if (cleanTag.toLowerCase().includes('sme')) {
+    if (cleanTag.toLowerCase().includes('sme') || boardType === 'SME') {
       return {
-        label: cleanTag,
+        label: tag || 'SME IPO',
         style: 'bg-amber-500/15 text-amber-300 border-amber-500/30'
       };
     }
     return {
-      label: cleanTag,
+      label: tag || 'Mainboard - Small Cap',
       style: 'bg-sky-500/15 text-sky-300 border-sky-500/30'
     };
   };
@@ -134,24 +156,28 @@ export default function KanbanBoard({ initialIpos }: KanbanBoardProps) {
           />
         </div>
 
-        {/* Market Cap Filter Pills */}
+        {/* Market Cap Filter Pills with Counts */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold text-zinc-500 flex items-center gap-1.5 mr-1">
             <Filter className="w-3.5 h-3.5" /> Market Cap:
           </span>
           {CATEGORY_FILTERS.map(filter => {
             const isActive = selectedFilter === filter;
+            const count = filterCounts[filter] ?? 0;
             return (
               <button
                 key={filter}
                 onClick={() => setSelectedFilter(filter)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition duration-200 border ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition duration-200 border flex items-center gap-1.5 ${
                   isActive
                     ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-600/25'
                     : 'bg-[#0a0f26] border-white/5 text-zinc-400 hover:text-zinc-200 hover:border-white/10'
                 }`}
               >
-                {filter}
+                <span>{filter}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${isActive ? 'bg-white/20 text-white' : 'bg-white/5 text-zinc-500'}`}>
+                  {count}
+                </span>
               </button>
             );
           })}
@@ -183,7 +209,7 @@ export default function KanbanBoard({ initialIpos }: KanbanBoardProps) {
                   </div>
                 ) : (
                   stageIpos.map(ipo => {
-                    const badge = getCategoryBadge(ipo.category_tag, ipo.board_type);
+                    const badge = getCategoryBadge(ipo.category_tag, ipo.board_type, ipo.issue_size);
                     return (
                       <div
                         key={ipo.id}
