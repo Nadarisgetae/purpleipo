@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, Landmark, Calendar, RefreshCw, FileText, ChevronDown, ChevronUp, 
-  CheckCircle, TrendingUp, AlertTriangle, Sparkles, Building2, BarChart3, Target, ShieldCheck 
+  CheckCircle, TrendingUp, AlertTriangle, Sparkles, Building2, BarChart3, Target, ShieldCheck,
+  Flame, Users, Clock
 } from 'lucide-react';
 
 interface IPODetailModalProps {
@@ -387,6 +388,100 @@ export default function IPODetailModal({ ipoId, onClose }: IPODetailModalProps) 
                           <p className="text-[10px] text-zinc-400 font-semibold mt-0.5">Cut-off Bid: {lotDetails.cutOff}</p>
                         )}
                       </div>
+                    </div>
+                  );
+                })()}
+
+                {/* NEW FEATURE: Subscription Demand & Oversubscription Status */}
+                {(() => {
+                  const totalSubObj = subscription?.find((s: any) => s.category?.toLowerCase().includes('total'));
+                  const totalSubVal = totalSubObj ? parseFloat(String(totalSubObj.times_subscribed)) : null;
+                  const isOversubscribed = totalSubVal !== null && totalSubVal >= 1.0;
+                  const isStage1 = ipo.current_stage === 1;
+
+                  if (isStage1) {
+                    return (
+                      <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
+                            <Clock className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">Subscription Status</span>
+                            <h4 className="text-xs font-bold text-zinc-200">Bidding Window Not Open Yet</h4>
+                            <p className="text-[11px] text-zinc-400">
+                              Live subscription order book will be tracked automatically once bidding opens on {ipo.issue_open_date ? new Date(ipo.issue_open_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'announced date'}.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className={`p-4 rounded-2xl border ${
+                      isOversubscribed
+                        ? 'bg-gradient-to-r from-emerald-950/40 via-[#0d1c2b] to-purple-950/30 border-emerald-500/30 shadow-lg'
+                        : 'bg-gradient-to-r from-amber-950/30 via-[#141424] to-zinc-900/40 border-amber-500/30'
+                    }`}>
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border flex items-center gap-1 ${
+                              isOversubscribed
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            }`}>
+                              {isOversubscribed ? <Flame className="w-3 h-3 text-emerald-400 shrink-0" /> : <Users className="w-3 h-3 text-amber-400 shrink-0" />}
+                              <span>{isOversubscribed ? 'Oversubscribed' : 'Subscription Demand'}</span>
+                            </span>
+                            <span className="text-[10px] text-zinc-400 font-semibold">Bidding Multiples by Investor Category</span>
+                          </div>
+                          <h4 className="text-xs font-bold text-zinc-200">Cumulative Subscription & Public Response</h4>
+                          <p className="text-[11px] text-zinc-400">
+                            {isOversubscribed 
+                              ? `Issue received strong institutional & retail demand at ${totalSubVal?.toFixed(2)}x total subscription.`
+                              : totalSubVal 
+                              ? `Current cumulative subscription stands at ${totalSubVal.toFixed(2)}x of total issue shares.`
+                              : 'Live bid collection in progress on exchange order book.'}
+                          </p>
+                        </div>
+
+                        <div className="text-left md:text-right bg-white/[0.03] md:bg-transparent p-3 md:p-0 rounded-xl border border-white/5 md:border-0 shrink-0">
+                          <p className="text-[9px] uppercase font-bold text-zinc-400">Total Subscription</p>
+                          <p className={`text-2xl font-black tracking-tight ${isOversubscribed ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {totalSubVal !== null ? `${totalSubVal.toFixed(2)}x` : 'In Progress'}
+                          </p>
+                          <p className="text-[10px] text-zinc-400 font-semibold mt-0.5">
+                            {isOversubscribed ? 'Oversubscribed' : totalSubVal ? 'Under-subscribed' : 'Awaiting Bids'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Category Breakdown Badges */}
+                      {subscription && subscription.length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                          {subscription.map((s: any, idx: number) => {
+                            const val = parseFloat(String(s.times_subscribed));
+                            const isOver = !isNaN(val) && val >= 1.0;
+                            return (
+                              <div key={idx} className="p-2.5 rounded-xl bg-black/30 border border-white/5 flex flex-col justify-between">
+                                <span className="text-[10px] font-semibold text-zinc-400">{s.category}</span>
+                                <div className="mt-1 flex items-baseline justify-between">
+                                  <span className={`text-sm font-black ${isOver ? 'text-emerald-400' : 'text-zinc-200'}`}>
+                                    {!isNaN(val) ? `${val.toFixed(2)}x` : 'N/A'}
+                                  </span>
+                                  <span className={`text-[8px] font-black uppercase px-1.5 py-0.2 rounded ${
+                                    isOver ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-zinc-400'
+                                  }`}>
+                                    {isOver ? 'Oversubscribed' : 'Normal'}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}

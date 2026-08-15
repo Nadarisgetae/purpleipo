@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Calendar, Landmark, Tag, TrendingUp, AlertTriangle, Layers, Filter } from 'lucide-react';
+import { Search, Calendar, Landmark, Tag, TrendingUp, AlertTriangle, Layers, Filter, Flame, Users } from 'lucide-react';
 import IPODetailModal from './IPODetailModal';
 
 interface IPO {
@@ -20,6 +20,10 @@ interface IPO {
   allotment_date: string | null;
   listing_date: string | null;
   rhp_score: number | null;
+  total_subscription?: string | number | null;
+  retail_subscription?: string | number | null;
+  qib_subscription?: string | number | null;
+  hni_subscription?: string | number | null;
 }
 
 interface KanbanBoardProps {
@@ -297,6 +301,39 @@ export default function KanbanBoard({ initialIpos }: KanbanBoardProps) {
                             );
                           })()}
                         </div>
+
+                        {/* Subscription Status for Stages 2, 3, 4 (Except Stage 1 Bidding Not Open) */}
+                        {stage.id !== 1 && (
+                          <div className="mt-3 pt-2.5 border-t border-white/[0.04] flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-zinc-400 flex items-center gap-1">
+                              <Users className="w-3 h-3 text-indigo-400" /> Subscription:
+                            </span>
+                            {(() => {
+                              const total = ipo.total_subscription !== null && ipo.total_subscription !== undefined ? parseFloat(String(ipo.total_subscription)) : null;
+                              if (total !== null && !isNaN(total)) {
+                                if (total >= 1.0) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                      <Flame className="w-3 h-3 text-emerald-400 shrink-0" />
+                                      <span>Oversubscribed ({total.toFixed(2)}x)</span>
+                                    </span>
+                                  );
+                                } else if (total > 0) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                      {total.toFixed(2)}x Subscribed
+                                    </span>
+                                  );
+                                }
+                              }
+                              return (
+                                <span className="text-[10px] text-zinc-500 italic">
+                                  Bidding in progress
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        )}
                       </div>
                     );
                   })

@@ -27,9 +27,15 @@ export default async function DashboardPage() {
         i.listing_date,
         i.rhp_score,
         c.name as company_name,
-        c.sector as company_sector
+        c.sector as company_sector,
+        MAX(CASE WHEN s.category ILIKE '%Total%' THEN s.times_subscribed END) as total_subscription,
+        MAX(CASE WHEN s.category ILIKE '%Retail%' THEN s.times_subscribed END) as retail_subscription,
+        MAX(CASE WHEN s.category ILIKE '%QIB%' THEN s.times_subscribed END) as qib_subscription,
+        MAX(CASE WHEN s.category ILIKE '%HNI%' OR s.category ILIKE '%NII%' THEN s.times_subscribed END) as hni_subscription
       FROM ipos i
       JOIN companies c ON i.company_id = c.id
+      LEFT JOIN subscription_data s ON s.ipo_id = i.id
+      GROUP BY i.id, c.name, c.sector
       ORDER BY i.issue_open_date DESC NULLS LAST;
     `;
   } catch (err: any) {
