@@ -152,22 +152,29 @@ export async function fetchAndParseSingleIPORHP(ipoId: string) {
 
   // Upload to Cloudflare R2 if configured
   let fileUrl = targetPdfUrl;
-  try {
-    const fileName = `${ipo.company_name.replace(/[^a-zA-Z0-9]/g, '_')}_RHP.pdf`;
-    fileUrl = await uploadToR2(buffer, fileName);
-    console.log(`  ☁️ Stored prospectus in Cloudflare R2: ${fileUrl}`);
-  } catch (r2Err: any) {
-    console.log(`  Cloudflare R2 upload bypassed: ${r2Err.message}`);
+  if (buffer && buffer.length > 0) {
+    try {
+      const fileName = `${ipo.company_name.replace(/[^a-zA-Z0-9]/g, '_')}_RHP.pdf`;
+      fileUrl = await uploadToR2(buffer, fileName);
+      console.log(`  ☁️ Stored prospectus in Cloudflare R2: ${fileUrl}`);
+    } catch (r2Err: any) {
+      console.log(`  Cloudflare R2 upload bypassed: ${r2Err.message}`);
+    }
   }
 
   // Parse PDF sections
   let sections: any = null;
-  try {
-    const data = await pdf(buffer);
-    sections = chunkPdfText(data.text);
-    console.log(`  ✓ Extracted RHP document text (${data.numpages} pages parsed).`);
-  } catch (parseErr: any) {
-    console.warn(`  PDF text parser warning: ${parseErr.message}`);
+  if (buffer && buffer.length > 0) {
+    try {
+      const data = await pdf(buffer);
+      sections = chunkPdfText(data.text);
+      console.log(`  ✓ Extracted RHP document text (${data.numpages} pages parsed).`);
+    } catch (parseErr: any) {
+      console.warn(`  PDF text parser warning: ${parseErr.message}`);
+    }
+  }
+
+  if (!sections) {
     // Build structured sections from available company overview metadata
     sections = {
       financial_statements: `Company: ${ipo.company_name}. Restated Financials: ${JSON.stringify(ipo.financials || {})}. KPIs: ${JSON.stringify(ipo.kpis || {})}`,
