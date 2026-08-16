@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
-import Script from 'next/script';
 import './globals.css';
 
 const inter = Inter({
@@ -39,20 +38,6 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body className="bg-[#090d16] text-slate-100 antialiased selection:bg-purple-600 selection:text-white font-sans">
         {children}
-        
-        <Script id="tawk-to" strategy="lazyOnload">
-          {`
-            var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
-            (function(){
-            var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
-            s1.async=true;
-            s1.src='https://embed.tawk.to/6a818a8277535e1d447dbb74/1k050a4a6';
-            s1.charset='UTF-8';
-            s1.setAttribute('crossorigin','*');
-            s0.parentNode.insertBefore(s1,s0);
-            })();
-          `}
-        </Script>
       </body>
     </html>
   );
