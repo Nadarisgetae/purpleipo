@@ -64,13 +64,29 @@ export async function GET(
       LIMIT 1;
     `;
 
+    // 7. Fetch News Sentiment Snapshot
+    const newsSnapshotQuery = await sql`
+      SELECT * FROM news_sentiment_snapshots 
+      WHERE ipo_id = ${ipoId} 
+      ORDER BY computed_at DESC LIMIT 1;
+    `;
+    let newsSentiment = null;
+    if (newsSnapshotQuery.length > 0) {
+      const snapshot = newsSnapshotQuery[0];
+      const articles = await sql`
+        SELECT * FROM news_articles WHERE analysis_run_id = ${snapshot.analysis_run_id} ORDER BY relevance_score DESC;
+      `;
+      newsSentiment = { snapshot, articles };
+    }
+
     return NextResponse.json({
       ipo,
       promoters: promoters.map(p => p.name),
       anchors,
       subscription,
       factorScores,
-      document: documents.length > 0 ? documents[0] : null
+      document: documents.length > 0 ? documents[0] : null,
+      newsSentiment
     });
   } catch (err: any) {
     console.error('Error fetching IPO detail API:', err.message);

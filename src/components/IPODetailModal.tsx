@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, Landmark, Calendar, RefreshCw, FileText, ChevronDown, ChevronUp, 
   CheckCircle, TrendingUp, AlertTriangle, Sparkles, Building2, BarChart3, Target, ShieldCheck,
-  Flame, Users, Clock
+  Flame, Users, Clock, Newspaper, TrendingDown, Minus
 } from 'lucide-react';
 
 interface IPODetailModalProps {
@@ -63,6 +63,8 @@ export default function IPODetailModal({ ipoId, onClose }: IPODetailModalProps) 
   const [loading, setLoading] = useState(true);
   const [evaluating, setEvaluating] = useState(false);
   const [fetchingDoc, setFetchingDoc] = useState(false);
+  const [analyzingNews, setAnalyzingNews] = useState(false);
+  const [newsError, setNewsError] = useState('');
   const [error, setError] = useState('');
 
   // Expandable card states
@@ -137,6 +139,29 @@ export default function IPODetailModal({ ipoId, onClose }: IPODetailModalProps) 
     }
   };
 
+  const handleAnalyzeNews = async (force = false) => {
+    setAnalyzingNews(true);
+    setNewsError('');
+    try {
+      const res = await fetch(`/api/ipos/${ipoId}/analyze-news`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force_refresh: force })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setData((prev: any) => ({ ...prev, newsSentiment: json }));
+      } else {
+        const errJson = await res.json();
+        setNewsError(errJson.error || 'Failed to analyze news');
+      }
+    } catch (e) {
+      setNewsError('Connection error while fetching news sentiment.');
+    } finally {
+      setAnalyzingNews(false);
+    }
+  };
+
   const getScoreColor = (score: number | null) => {
     if (score === null) return 'text-zinc-500 bg-zinc-500/10 border-zinc-500/20';
     if (score >= 8) return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
@@ -180,7 +205,7 @@ export default function IPODetailModal({ ipoId, onClose }: IPODetailModalProps) 
     );
   }
 
-  const { ipo, promoters, anchors, subscription, factorScores, document } = data;
+  const { ipo, promoters, anchors, subscription, factorScores, document, newsSentiment } = data;
 
   // Group factors by category
   const categories = [
@@ -330,6 +355,117 @@ export default function IPODetailModal({ ipoId, onClose }: IPODetailModalProps) 
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* ON-DEMAND NEWS SENTIMENT CARD */}
+          <div className="bg-[#0a0f26]/80 border border-white/5 p-5 rounded-2xl relative overflow-hidden space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Newspaper className="w-4 h-4 text-blue-400" />
+                  <h3 className="text-sm font-black text-white tracking-wide uppercase">Market News & Sentiment</h3>
+                </div>
+                <p className="text-[11px] text-zinc-400">
+                  On-demand analysis of top 30 recent articles via LLM. Measures current media buzz and reaction.
+                </p>
+              </div>
+
+              <div className="shrink-0 flex items-center gap-3">
+                {newsSentiment && newsSentiment.snapshot && (
+                  <div className="text-right">
+                    <p className="text-[9px] uppercase font-bold text-zinc-500">
+                      Analyzed: {new Date(newsSentiment.snapshot.computed_at).toLocaleDateString('en-IN', { hour: 'numeric', minute: 'numeric' })}
+                    </p>
+                  </div>
+                )}
+                <button
+                  onClick={() => handleAnalyzeNews(true)}
+                  disabled={analyzingNews}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold border transition ${
+                    analyzingNews
+                      ? 'bg-blue-600/20 border-blue-500/30 text-blue-400 shadow-lg shadow-blue-600/20'
+                      : 'bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-600/25'
+                  }`}
+                >
+                  {analyzingNews ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Newspaper className="w-4 h-4" />}
+                  {analyzingNews ? 'Analyzing...' : newsSentiment ? 'Refresh News' : 'Analyze News Sentiment'}
+                </button>
+              </div>
+            </div>
+
+            {newsError && (
+              <div className="bg-rose-500/10 border border-rose-500/20 p-3 rounded-xl text-rose-400 text-xs font-semibold">
+                {newsError}
+              </div>
+            )}
+
+            {newsSentiment && newsSentiment.snapshot && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-white/5">
+                {/* Score */}
+                <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl flex flex-col items-center justify-center text-center">
+                  <span className="text-[10px] font-bold uppercase text-zinc-500">Sentiment Score</span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-4xl font-black text-white">{Math.round(newsSentiment.snapshot.news_sentiment_score)}</span>
+                    <span className="text-sm font-semibold text-zinc-500">/ 100</span>
+                  </div>
+                  <div className={`mt-2 flex items-center gap-1 px-2.5 py-1 rounded-md text-[9px] font-black uppercase ${
+                    newsSentiment.snapshot.sentiment_trend_direction === 'up' ? 'bg-emerald-500/15 text-emerald-400' :
+                    newsSentiment.snapshot.sentiment_trend_direction === 'down' ? 'bg-rose-500/15 text-rose-400' :
+                    'bg-zinc-500/15 text-zinc-400'
+                  }`}>
+                    {newsSentiment.snapshot.sentiment_trend_direction === 'up' ? <TrendingUp className="w-3 h-3" /> :
+                     newsSentiment.snapshot.sentiment_trend_direction === 'down' ? <TrendingDown className="w-3 h-3" /> :
+                     <Minus className="w-3 h-3" />}
+                    {newsSentiment.snapshot.sentiment_trend_direction === 'up' ? 'Improving Trend' :
+                     newsSentiment.snapshot.sentiment_trend_direction === 'down' ? 'Deteriorating Trend' : 'Flat Trend'}
+                  </div>
+                </div>
+
+                {/* Consensus & Volume */}
+                <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl flex flex-col justify-center space-y-3">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-zinc-500 block mb-0.5">Consensus (Dispersion)</span>
+                    <span className={`text-sm font-bold ${
+                      newsSentiment.snapshot.sentiment_dispersion < 0.1 ? 'text-emerald-400' :
+                      newsSentiment.snapshot.sentiment_dispersion < 0.3 ? 'text-amber-400' : 'text-rose-400'
+                    }`}>
+                      {newsSentiment.snapshot.sentiment_dispersion < 0.1 ? 'High (Unified Media)' :
+                       newsSentiment.snapshot.sentiment_dispersion < 0.3 ? 'Medium (Mixed)' : 'Low (Divided Opinions)'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-zinc-500 block mb-0.5">Coverage Volume</span>
+                    <span className="text-sm font-bold text-zinc-200">
+                      {newsSentiment.snapshot.coverage_volume_recent} recent articles (Last 48h)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Top Articles Peek */}
+                <div className="bg-white/[0.02] border border-white/5 p-3 rounded-2xl flex flex-col justify-between overflow-hidden">
+                  <span className="text-[10px] font-bold uppercase text-zinc-500 mb-2 block">Latest Headlines</span>
+                  <div className="space-y-2">
+                    {newsSentiment.articles?.slice(0, 2).map((art: any, i: number) => (
+                      <a key={i} href={art.url} target="_blank" rel="noreferrer" className="block group">
+                        <p className="text-[10px] font-semibold text-zinc-300 group-hover:text-blue-400 line-clamp-2 leading-snug transition">
+                          {art.headline}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[8px] text-zinc-500">{art.source}</span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            art.sentiment_score > 0.3 ? 'bg-emerald-500' :
+                            art.sentiment_score < -0.3 ? 'bg-rose-500' : 'bg-amber-500'
+                          }`}></span>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                  <span className="text-[9px] font-bold text-zinc-500 mt-2 block italic text-right">
+                    Analyzed {newsSentiment.snapshot.articles_scored_count} articles
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* CARD 1 — Expandable Issue Overview & Scraped Profile */}
