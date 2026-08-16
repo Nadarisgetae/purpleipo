@@ -61,7 +61,7 @@ export async function callOpenRouterLLM(options: ChatCompletionOptions): Promise
         });
 
         const response = await openai.chat.completions.create({
-          model: 'nvidia/llama-3.1-nemotron-70b-instruct',
+          model: 'nvidia/nemotron-3-super-120b-a12b:free',
           messages: [
             ...(options.systemPrompt ? [{ role: 'system' as const, content: options.systemPrompt }] : []),
             { role: 'user' as const, content: options.prompt }
