@@ -4,12 +4,9 @@ import sql from './db';
 
 // Parse OpenRouter API keys from environment
 function getOpenRouterKeys(): string[] {
-  const keysStr = process.env.OPENROUTER_KEYS || '';
-  const keys = keysStr.split(',').map(k => k.trim()).filter(Boolean);
-  if (keys.length === 0 && process.env.OPENROUTER_API_KEY) {
-    keys.push(process.env.OPENROUTER_API_KEY);
-  }
-  return keys;
+  let keysStr = process.env.OPENROUTER_KEYS || '';
+  if (!keysStr) keysStr = process.env.OPENROUTER_API_KEY || '';
+  return keysStr.split(',').map(k => k.trim()).filter(Boolean);
 }
 
 interface ChatCompletionOptions {
@@ -64,7 +61,7 @@ export async function callOpenRouterLLM(options: ChatCompletionOptions): Promise
         });
 
         const response = await openai.chat.completions.create({
-          model: 'meta-llama/llama-3.3-70b-instruct:free',
+          model: 'nvidia/llama-3.1-nemotron-70b-instruct',
           messages: [
             ...(options.systemPrompt ? [{ role: 'system' as const, content: options.systemPrompt }] : []),
             { role: 'user' as const, content: options.prompt }
