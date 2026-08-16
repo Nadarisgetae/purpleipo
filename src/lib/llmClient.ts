@@ -55,6 +55,8 @@ export async function callOpenRouterLLM(options: ChatCompletionOptions): Promise
         const openai = new OpenAI({
           apiKey,
           baseURL: 'https://openrouter.ai/api/v1',
+          maxRetries: 0,
+          timeout: 15000,
           defaultHeaders: {
             'HTTP-Referer': 'https://purpleipo.com',
             'X-Title': 'PurpleIPO'
@@ -62,12 +64,11 @@ export async function callOpenRouterLLM(options: ChatCompletionOptions): Promise
         });
 
         const response = await openai.chat.completions.create({
-          model: 'nvidia/llama-3.1-nemotron-70b-instruct',
+          model: 'meta-llama/llama-3.3-70b-instruct:free',
           messages: [
             ...(options.systemPrompt ? [{ role: 'system' as const, content: options.systemPrompt }] : []),
             { role: 'user' as const, content: options.prompt }
           ],
-          response_format: options.responseFormat ? { type: options.responseFormat } : undefined,
           temperature: 0.1
         });
 

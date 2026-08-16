@@ -80,7 +80,10 @@ export async function POST(
           responseFormat: 'json_object'
         });
         
-        const parsed = JSON.parse(responseText);
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('No JSON object found in LLM response: ' + responseText.substring(0, 50));
+        
+        const parsed = JSON.parse(jsonMatch[0]);
         if (parsed.results && Array.isArray(parsed.results)) {
           scoredResults.push(...parsed.results);
         }
