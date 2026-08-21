@@ -1,11 +1,38 @@
 import sql from '../lib/db';
 import KanbanBoard from '../components/KanbanBoard';
-import { Shield, RefreshCw, FileText, Database } from 'lucide-react';
+import { Shield, RefreshCw, FileText, Database, Layers } from 'lucide-react';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
+  // Auto-recalculate stages on every page load based on today's date
+  try {
+    await sql`
+      UPDATE ipos
+      SET
+        current_stage = CASE
+          WHEN listing_date IS NOT NULL AND CURRENT_DATE >= listing_date::date THEN 4
+          WHEN issue_close_date IS NOT NULL AND CURRENT_DATE > issue_close_date::date
+            AND (listing_date IS NULL OR CURRENT_DATE < listing_date::date) THEN 3
+          WHEN issue_open_date IS NOT NULL AND CURRENT_DATE >= issue_open_date::date
+            AND (issue_close_date IS NULL OR CURRENT_DATE <= issue_close_date::date) THEN 2
+          ELSE 1
+        END,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE current_stage IS DISTINCT FROM CASE
+        WHEN listing_date IS NOT NULL AND CURRENT_DATE >= listing_date::date THEN 4
+        WHEN issue_close_date IS NOT NULL AND CURRENT_DATE > issue_close_date::date
+          AND (listing_date IS NULL OR CURRENT_DATE < listing_date::date) THEN 3
+        WHEN issue_open_date IS NOT NULL AND CURRENT_DATE >= issue_open_date::date
+          AND (issue_close_date IS NULL OR CURRENT_DATE <= issue_close_date::date) THEN 2
+        ELSE 1
+      END
+    `;
+  } catch (stageErr: any) {
+    console.warn('Stage auto-recalculation warning:', stageErr.message);
+  }
+
   // Query all IPOs and company profiles server-side
   let ipos: any[] = [];
   try {
@@ -104,6 +131,12 @@ export default async function DashboardPage() {
 
             {/* Quick Actions Panel */}
             <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <ClientTriggerButton
+                actionUrl="/api/sync/stages"
+                label="Refresh Stages"
+                icon={<Layers className="w-4 h-4" />}
+                description="Recalculates IPO stages (bidding/allotment/listing) based on today's date."
+              />
               <ClientTriggerButton
                 actionUrl="/api/sync/chittorgarh"
                 label="Sync Listings"
