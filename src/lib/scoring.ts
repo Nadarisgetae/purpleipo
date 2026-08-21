@@ -285,24 +285,149 @@ export async function evaluateIPORHPScores(ipoId: string): Promise<number> {
   scoresMap['promoter_holding_post_ipo'] = holdingScore;
   console.log(`  ✓ Rule Scored: Promoter Holding Post-IPO = ${holdingScore}`);
 
-  // 3. Narrative Factors (LLM Assisted)
-  for (const factor of FACTORS) {
-    console.log(`  Evaluating factor: ${factor.name}...`);
-    const sectionText = sections[factor.sectionKey] || '';
-    
-    if (!sectionText) {
-      // Fallback if section is empty
-      const score = 5;
-      const evidence = `RHP section "${factor.sectionKey}" was not extracted. Defaulted to neutral.`;
-      await sql`
-        INSERT INTO factor_scores (ipo_id, factor_key, category, score, confidence, evidence_text, source_section)
-        VALUES (${ipoId}, ${factor.key}, ${factor.category}, ${score}, 0.5, ${evidence}, ${factor.sectionKey})
-      `;
-      scoresMap[factor.key] = score;
-      continue;
-    }
+  // 3. Narrative Factors (LLM Assisted) — evaluated in PARALLEL
+  console.log(`  🚀 Evaluating ${FACTORS.length} factors in parallel...`);
 
-    const systemPrompt = `You are a strict, veteran IPO research analyst. Your task is to evaluate the company: ${ipo.company_name} on the metric: "${factor.name}".
+  // Helper to run domain rule fallback when LLM fails
+  function domainRuleFallback(factor: FactorDefinition, ipo: any): { score: number; confidence: number; evidence: string } {
+    const finList: any[] = Array.isArray(ipo.financials) ? ipo.financials : [];
+    const kpiList: any[] = Array.isArray(ipo.kpis) ? ipo.kpis : [];
+
+    const getKpiVal = (name: string): string => {
+      const found = kpiList.find((k: any) => k.kpi?.toLowerCase().includes(name.toLowerCase()));
+      return found ? found.value : '';
+    };
+    const getFinMetric = (name: string): string => {
+      const found = finList.find((f: any) => f.metric?.toLowerCase().includes(name.toLowerCase()));
+      return found && found.values?.length > 0 ? found.values[0] : '';
+    };
+
+    const revVal = getFinMetric('Revenue') || getFinMetric('Income');
+    const patVal = getFinMetric('Profit') || getFinMetric('PAT');
+    const debtEq = getKpiVal('Debt') || getKpiVal('D/E');
+    const ronw   = getKpiVal('RoNW') || getKpiVal('ROE');
+    const peRatio = getKpiVal('P/E') || getKpiVal('PE');
+
+    let score = 7;
+    let evidence = 'Evaluated in accordance with standard RHP underwriting criteria.';
+
+    switch (factor.key) {
+      case 'financial_track_record':
+        score = patVal && !patVal.includes('-') ? 8 : 7;
+        evidence = revVal
+          ? `Reported latest period Revenue of ₹${revVal} Cr and PAT of ₹${patVal || 'positive'} Cr, indicating positive operational profitability.`
+          : `Demonstrates consistent multi-year operational revenue trajectory and sustained market presence.`;
+        break;
+      case 'cash_flow_quality':
+        score = ronw ? 8 : 7;
+        evidence = ronw
+          ? `Return on Net Worth (RoNW) stands at ${ronw}, demonstrating solid cash conversion efficiency and earnings quality.`
+          : `Operating earnings reflect steady working capital realizations without anomalous receivable spikes.`;
+        break;
+      case 'working_capital_cycle':
+        score = 7;
+        evidence = `Operating turnaround cycles and customer collection schedules align with standard sectoral manufacturing norms.`;
+        break;
+      case 'debt_levels':
+        score = debtEq && parseFloat(debtEq) < 1.0 ? 8 : 7;
+        evidence = debtEq
+          ? `Reported Debt-to-Equity ratio of ${debtEq} reflects balanced leverage with manageable borrowing exposure.`
+          : `Balance sheet leverage remains within sustainable interest coverage parameters.`;
+        break;
+      case 'contingent_liabilities':
+        score = 8;
+        evidence = `No disproportionate disputed tax demands or material guarantees threatening shareholders' net worth.`;
+        break;
+      case 'objects_of_issue':
+        score = 8;
+        evidence = ipo.objects_of_issue
+          ? `IPO proceeds clearly allocated: ${ipo.objects_of_issue.substring(0, 140)}...`
+          : `Issue proceeds allocated to funding capital expenditure, capacity enhancement, and general corporate growth.`;
+        break;
+      case 'valuation_vs_peers':
+        score = 7;
+        evidence = peRatio
+          ? `Priced at a P/E multiple of ${peRatio}, offering reasonable entry valuation relative to listed peer averages.`
+          : `Offer price band of ${ipo.price_band || 'market rate'} is competitively positioned within the industry peer basket.`;
+        break;
+      case 'lock_in_periods':
+        score = 8;
+        evidence = `Mandatory statutory 180-day and 365-day lock-in periods apply for pre-IPO investors, mitigating immediate supply overhang.`;
+        break;
+      case 'esop_overhang':
+        score = 8;
+        evidence = `Employee stock option pool remains conservative and below statutory equity dilution thresholds.`;
+        break;
+      case 'promoter_share_pledging':
+        score = 9;
+        evidence = `Promoter group retains unencumbered equity holding with zero reported share pledging.`;
+        break;
+      case 'related_party_transactions':
+        score = 7;
+        evidence = `Inter-company and related party transactions are conducted on arm's-length terms in the ordinary course of business.`;
+        break;
+      case 'corporate_governance_history':
+        score = 8;
+        evidence = `Clean regulatory history with standard statutory compliance and independent board oversight structure.`;
+        break;
+      case 'historical_financial_restatements':
+        score = 8;
+        evidence = `Restated historical financial accounts show standard audit adjustments without severe adverse qualifications.`;
+        break;
+      case 'management_background':
+        score = 8;
+        evidence = `Executive leadership and key managerial personnel possess extensive domain experience in the enterprise domain.`;
+        break;
+      case 'revenue_customer_concentration':
+        score = 7;
+        evidence = `Customer order book demonstrates broad commercial diversification across corporate and retail client segments.`;
+        break;
+      case 'litigation_regulatory_risk':
+        score = 8;
+        evidence = `Outstanding legal proceedings are limited to routine commercial disputes without material systemic liability risk.`;
+        break;
+      case 'market_share_moat':
+        score = ipo.category_tag?.includes('Large') ? 8 : 7;
+        evidence = `Established market footprint supported by specialized product capabilities and recurring customer relationships.`;
+        break;
+      case 'industry_tailwinds':
+        score = 8;
+        evidence = `Operating sector benefits from positive domestic macro consumption, capital investment expansion, and sectoral demand.`;
+        break;
+      case 'regulatory_sector_risk':
+        score = 7;
+        evidence = `Fully compliant with prevailing statutory, environmental, and SEBI listing regulatory mandates.`;
+        break;
+      case 'dividend_history_capital_allocation':
+        score = 7;
+        evidence = `Reinvestment strategy channels operational cash flows into productive enterprise expansion and balance sheet strength.`;
+        break;
+    }
+    return { score, confidence: 0.6, evidence };
+  }
+
+  // Run all factor evaluations concurrently
+  interface FactorResult {
+    factor: FactorDefinition;
+    score: number;
+    confidence: number;
+    evidence: string;
+  }
+
+  const factorResults: FactorResult[] = await Promise.all(
+    FACTORS.map(async (factor): Promise<FactorResult> => {
+      const sectionText = sections[factor.sectionKey] || '';
+
+      if (!sectionText) {
+        return {
+          factor,
+          score: 5,
+          confidence: 0.5,
+          evidence: `RHP section "${factor.sectionKey}" was not extracted. Defaulted to neutral.`
+        };
+      }
+
+      const systemPrompt = `You are a strict, veteran IPO research analyst. Your task is to evaluate the company: ${ipo.company_name} on the metric: "${factor.name}".
 Evaluate using the provided RHP section text. Under no circumstances should you invent facts. Be highly conservative.
 Return ONLY a valid JSON object matching this structure:
 {
@@ -311,7 +436,7 @@ Return ONLY a valid JSON object matching this structure:
   "evidence": "A single sentence of evidence containing concrete facts, numbers or notes found in the text."
 }`;
 
-    const prompt = `Factor Key: ${factor.key}
+      const prompt = `Factor Key: ${factor.key}
 Factor Description: ${factor.description}
 Green Flags (Higher Score 8-10): ${factor.greenFlags}
 Red Flags (Lower Score 1-4): ${factor.redFlags}
@@ -323,173 +448,41 @@ ${sectionText.substring(0, 12000)}
 
 Evaluate and output ONLY the JSON structure.`;
 
-    let finalScore = 5;
-    let confidence = 0.85;
-    let evidence = '';
+      try {
+        const responseText = await callOpenRouterLLM({
+          prompt,
+          systemPrompt,
+          responseFormat: 'json_object'
+        });
 
-    try {
-      const responseText = await callOpenRouterLLM({
-        prompt,
-        systemPrompt,
-        responseFormat: 'json_object'
-      });
+        const cleanJsonStr = responseText.replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(cleanJsonStr);
 
-      const cleanJsonStr = responseText.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(cleanJsonStr);
-
-      finalScore = Math.max(1, Math.min(10, Number(parsed.score || 5)));
-      confidence = Math.max(0.1, Math.min(1, Number(parsed.confidence || 0.85)));
-      evidence = parsed.evidence || 'Evaluated successfully.';
-      console.log(`    ✓ LLM Scored: ${factor.name} = ${finalScore}`);
-    } catch (err: any) {
-      // Intelligent Domain-Specific Rule Fallback using Scraped Data
-      console.log(`    ℹ️ Calculating domain rule metrics for: ${factor.name}`);
-      
-      const finList: any[] = Array.isArray(ipo.financials) ? ipo.financials : [];
-      const kpiList: any[] = Array.isArray(ipo.kpis) ? ipo.kpis : [];
-      
-      // Helper to find KPI value
-      const getKpiVal = (name: string): string => {
-        const found = kpiList.find((k: any) => k.kpi?.toLowerCase().includes(name.toLowerCase()));
-        return found ? found.value : '';
-      };
-
-      // Helper to find Financial Metric
-      const getFinMetric = (name: string): string => {
-        const found = finList.find((f: any) => f.metric?.toLowerCase().includes(name.toLowerCase()));
-        return found && found.values?.length > 0 ? found.values[0] : '';
-      };
-
-      const revVal = getFinMetric('Revenue') || getFinMetric('Income');
-      const patVal = getFinMetric('Profit') || getFinMetric('PAT');
-      const debtEq = getKpiVal('Debt') || getKpiVal('D/E');
-      const ronw = getKpiVal('RoNW') || getKpiVal('ROE');
-      const roce = getKpiVal('ROCE');
-      const peRatio = getKpiVal('P/E') || getKpiVal('PE');
-
-      switch (factor.key) {
-        case 'financial_track_record':
-          finalScore = patVal && !patVal.includes('-') ? 8 : 7;
-          evidence = revVal 
-            ? `Reported latest period Revenue of ₹${revVal} Cr and PAT of ₹${patVal || 'positive'} Cr, indicating positive operational profitability.`
-            : `Demonstrates consistent multi-year operational revenue trajectory and sustained market presence.`;
-          break;
-
-        case 'cash_flow_quality':
-          finalScore = ronw ? 8 : 7;
-          evidence = ronw
-            ? `Return on Net Worth (RoNW) stands at ${ronw}, demonstrating solid cash conversion efficiency and earnings quality.`
-            : `Operating earnings reflect steady working capital realizations without anomalous receivable spikes.`;
-          break;
-
-        case 'working_capital_cycle':
-          finalScore = 7;
-          evidence = `Operating turnaround cycles and customer collection schedules align with standard sectoral manufacturing norms.`;
-          break;
-
-        case 'debt_levels':
-          finalScore = debtEq && parseFloat(debtEq) < 1.0 ? 8 : 7;
-          evidence = debtEq 
-            ? `Reported Debt-to-Equity ratio of ${debtEq} reflects balanced leverage with manageable borrowing exposure.`
-            : `Balance sheet leverage remains within sustainable interest coverage parameters.`;
-          break;
-
-        case 'contingent_liabilities':
-          finalScore = 8;
-          evidence = `No disproportionate disputed tax demands or material guarantees threatening shareholders' net worth.`;
-          break;
-
-        case 'objects_of_issue':
-          finalScore = 8;
-          evidence = ipo.objects_of_issue
-            ? `IPO proceeds clearly allocated: ${ipo.objects_of_issue.substring(0, 140)}...`
-            : `Issue proceeds allocated to funding capital expenditure, capacity enhancement, and general corporate growth.`;
-          break;
-
-        case 'valuation_vs_peers':
-          finalScore = peRatio ? 7 : 7;
-          evidence = peRatio
-            ? `Priced at a P/E multiple of ${peRatio}, offering reasonable entry valuation relative to listed peer averages.`
-            : `Offer price band of ${ipo.price_band || 'market rate'} is competitively positioned within the industry peer basket.`;
-          break;
-
-        case 'lock_in_periods':
-          finalScore = 8;
-          evidence = `Mandatory statutory 180-day and 365-day lock-in periods apply for pre-IPO investors, mitigating immediate supply overhang.`;
-          break;
-
-        case 'esop_overhang':
-          finalScore = 8;
-          evidence = `Employee stock option pool remains conservative and below statutory equity dilution thresholds.`;
-          break;
-
-        case 'promoter_share_pledging':
-          finalScore = 9;
-          evidence = `Promoter group retains unencumbered equity holding with zero reported share pledging.`;
-          break;
-
-        case 'related_party_transactions':
-          finalScore = 7;
-          evidence = `Inter-company and related party transactions are conducted on arm's-length terms in the ordinary course of business.`;
-          break;
-
-        case 'corporate_governance_history':
-          finalScore = 8;
-          evidence = `Clean regulatory history with standard statutory compliance and independent board oversight structure.`;
-          break;
-
-        case 'historical_financial_restatements':
-          finalScore = 8;
-          evidence = `Restated historical financial accounts show standard audit adjustments without severe adverse qualifications.`;
-          break;
-
-        case 'management_background':
-          finalScore = 8;
-          evidence = `Executive leadership and key managerial personnel possess extensive domain experience in the enterprise domain.`;
-          break;
-
-        case 'revenue_customer_concentration':
-          finalScore = 7;
-          evidence = `Customer order book demonstrates broad commercial diversification across corporate and retail client segments.`;
-          break;
-
-        case 'litigation_regulatory_risk':
-          finalScore = 8;
-          evidence = `Outstanding legal proceedings are limited to routine commercial disputes without material systemic liability risk.`;
-          break;
-
-        case 'market_share_moat':
-          finalScore = ipo.category_tag?.includes('Large') ? 8 : 7;
-          evidence = `Established market footprint supported by specialized product capabilities and recurring customer relationships.`;
-          break;
-
-        case 'industry_tailwinds':
-          finalScore = 8;
-          evidence = `Operating sector benefits from positive domestic macro consumption, capital investment expansion, and sectoral demand.`;
-          break;
-
-        case 'regulatory_sector_risk':
-          finalScore = 7;
-          evidence = `Fully compliant with prevailing statutory, environmental, and SEBI listing regulatory mandates.`;
-          break;
-
-        case 'dividend_history_capital_allocation':
-          finalScore = 7;
-          evidence = `Reinvestment strategy channels operational cash flows into productive enterprise expansion and balance sheet strength.`;
-          break;
-
-        default:
-          finalScore = 7;
-          evidence = `Evaluated in accordance with standard RHP underwriting criteria.`;
-          break;
+        const score = Math.max(1, Math.min(10, Number(parsed.score || 5)));
+        const confidence = Math.max(0.1, Math.min(1, Number(parsed.confidence || 0.85)));
+        const evidence = parsed.evidence || 'Evaluated successfully.';
+        console.log(`    ✓ LLM Scored: ${factor.name} = ${score}`);
+        return { factor, score, confidence, evidence };
+      } catch (err: any) {
+        console.log(`    ℹ️ Domain rule fallback for: ${factor.name}`);
+        return { factor, ...domainRuleFallback(factor, ipo) };
       }
-    }
+    })
+  );
 
-    await sql`
-      INSERT INTO factor_scores (ipo_id, factor_key, category, score, confidence, evidence_text, source_section)
-      VALUES (${ipoId}, ${factor.key}, ${factor.category}, ${finalScore}, ${confidence}, ${evidence}, ${factor.sectionKey})
-    `;
-    scoresMap[factor.key] = finalScore;
+  // INSERT all factor scores in parallel
+  await Promise.all(
+    factorResults.map(r =>
+      sql`
+        INSERT INTO factor_scores (ipo_id, factor_key, category, score, confidence, evidence_text, source_section)
+        VALUES (${ipoId}, ${r.factor.key}, ${r.factor.category}, ${r.score}, ${r.confidence}, ${r.evidence}, ${r.factor.sectionKey})
+      `
+    )
+  );
+
+  // Populate scoresMap from results
+  for (const r of factorResults) {
+    scoresMap[r.factor.key] = r.score;
   }
 
   // 4. Market Sentiment & Demand signals (Calculated from Chittorgarh subscription rates)

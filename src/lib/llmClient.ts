@@ -25,7 +25,7 @@ export async function callOpenRouterLLM(options: ChatCompletionOptions): Promise
     try {
       const genAI = new GoogleGenerativeAI(geminiKey);
       const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.0-flash',
         generationConfig: {
           temperature: 0.1,
           responseMimeType: options.responseFormat === 'json_object' ? 'application/json' : 'text/plain'
@@ -66,7 +66,8 @@ export async function callOpenRouterLLM(options: ChatCompletionOptions): Promise
             ...(options.systemPrompt ? [{ role: 'system' as const, content: options.systemPrompt }] : []),
             { role: 'user' as const, content: options.prompt }
           ],
-          temperature: 0.1
+          temperature: 0.1,
+          ...(options.responseFormat === 'json_object' ? { response_format: { type: 'json_object' as const } } : {})
         });
 
         const content = response.choices[0]?.message?.content;

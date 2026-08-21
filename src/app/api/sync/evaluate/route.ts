@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { evaluateIPORHPScores } from '../../../../lib/scoring';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // 300s max for parallel LLM evaluation (Vercel Pro)
 
 export async function POST(request: Request) {
   try {
