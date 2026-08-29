@@ -1,19 +1,17 @@
 import { NextResponse } from 'next/server';
 import { scrapeChittorgarhIPOs } from '../../../../lib/scrapers/chittorgarh';
 
+export const maxDuration = 60; // Allow up to 60 seconds for the Vercel function
 export const dynamic = 'force-dynamic';
 
 export async function POST() {
   try {
-    // Run the scraper asynchronously so Vercel serverless doesn't time out
-    // (Playwright can take 60s+ to scrape all detail pages).
-    // We execute it in the background.
     console.log('Manual trigger: Starting Chittorgarh scraper...');
-    scrapeChittorgarhIPOs().catch(err => {
-      console.error('Background Chittorgarh scraper failed:', err.message);
-    });
+    // Await the scraper so Vercel doesn't kill the function early.
+    // Background execution without await (or waitUntil) fails on Vercel.
+    await scrapeChittorgarhIPOs();
 
-    return NextResponse.json({ message: 'Chittorgarh sync triggered in background' });
+    return NextResponse.json({ message: 'Chittorgarh sync completed successfully' });
   } catch (err: any) {
     console.error('Failed to trigger Chittorgarh scraper:', err.message);
     return NextResponse.json({ error: err.message }, { status: 500 });
