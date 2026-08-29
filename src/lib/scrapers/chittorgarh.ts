@@ -207,8 +207,17 @@ export async function scrapeChittorgarhIPOs() {
     return new Date(`${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}T00:00:00.000Z`);
   })();
 
-  for (const entry of entries) {
-    console.log(`\n🔍 [${entry.boardType}] Processing: ${entry.companyName}`);
+  // Helper to process in chunks to avoid overwhelming the connection/server
+  const chunkArray = <T>(arr: T[], size: number): T[][] =>
+    Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>
+      arr.slice(i * size, i * size + size)
+    );
+
+  const entryChunks = chunkArray(entries, 5);
+
+  for (const chunk of entryChunks) {
+    await Promise.all(chunk.map(async (entry) => {
+      console.log(`\n🔍 [${entry.boardType}] Processing: ${entry.companyName}`);
 
     const { openDate, closeDate } = parseIpowatchDateRange(entry.dateStr, year);
 
@@ -579,7 +588,8 @@ export async function scrapeChittorgarhIPOs() {
       }
     }
 
-    console.log(`  ✓ Saved: stage=${stage} lot=${lotSize} desc=${!!description} fin=${financialsData.length}`);
+    console.log(`  ✓ Saved: ${entry.companyName} stage=${stage} lot=${lotSize} desc=${!!description} fin=${financialsData.length}`);
+  }));
   }
 
   console.log('\n🎉 Finished scraping all IPOs.');

@@ -30,9 +30,12 @@ export default function ClientTriggerButton({
         setStatus('success');
       } else {
         setStatus('error');
+        const errData = await res.json().catch(() => null);
+        alert(`Sync failed: ${errData?.error || res.statusText || 'Unknown error'}`);
       }
-    } catch (e) {
+    } catch (e: any) {
       setStatus('error');
+      alert(`Network error: ${e.message}`);
     } finally {
       setLoading(false);
       setTimeout(() => setStatus('idle'), 4000);
